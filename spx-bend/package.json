@@ -1,0 +1,28 @@
+{
+  "name": "spx-bend",
+  "version": "1.0.0",
+  "description": "Pulse Player backend: self-hosted LAN music streaming server.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "music",
+    "streaming",
+    "lan",
+    "spotify"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cloudinary": "^2.8.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "expo": "^57.0.4",
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
+    "music-metadata": "^11.12.3"
+  }
+}

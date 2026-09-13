@@ -1,0 +1,44 @@
+# Dependency directories
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Expo / React Native
+.expo/
+*.jks
+*.p8
+*.mobileprovision
+*.orig.*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Backend specific
+/spx-bend/music/
+/spx-bend/.uploads/
+/playlists.json
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+expo-start.out.log
+expo-start.err.log
+expo-verify.out.log
+expo-verify.err.log

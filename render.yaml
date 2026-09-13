@@ -1,0 +1,18 @@
+services:
+  - name: pulse-player-api
+    type: web
+    runtime: node
+    plan: free
+    rootDir: spx-bend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_AUDIO_FOLDER
+        value: pulse-player
