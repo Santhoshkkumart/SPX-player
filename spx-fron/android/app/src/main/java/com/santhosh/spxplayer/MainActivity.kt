@@ -1,4 +1,4 @@
-package com.santhosh.pulseplayer
+package com.santhosh.spxplayer
 
 import android.os.Build
 import android.os.Bundle

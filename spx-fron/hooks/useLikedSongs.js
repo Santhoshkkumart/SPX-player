@@ -1,45 +1,62 @@
-import { useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getSongId } from '../utils/helpers';
+﻿import { useState, useEffect, useCallback } from 'react';
+import { Alert } from 'react-native';
+import { sanitizeBaseUrl, getSongId } from '../utils/helpers';
 
-export function useLikedSongs() {
+export function useLikedSongs(backendUrl, authenticatedFetch, isAuthenticated) {
   const [likedSongs, setLikedSongs] = useState([]);
 
-  useEffect(() => {
-    const loadLikedSongs = async () => {
-      try {
-        const saved = await AsyncStorage.getItem('@likedSongs');
-        if (saved) {
-          setLikedSongs(JSON.parse(saved));
-        }
-      } catch (e) {
-        console.error('Failed to load liked songs', e);
+  const fetchLikedSongs = useCallback(async (baseUrl = backendUrl) => {
+    if (!isAuthenticated || !authenticatedFetch) {
+      setLikedSongs([]);
+      return;
+    }
+
+    const safeBaseUrl = sanitizeBaseUrl(baseUrl);
+    try {
+      const response = await authenticatedFetch(`${safeBaseUrl}/likes`);
+      if (response.ok) {
+        const data = await response.json();
+        setLikedSongs(Array.isArray(data) ? data : []);
       }
-    };
-    loadLikedSongs();
-  }, []);
+    } catch (error) {
+      console.error('Failed to fetch liked songs:', error);
+    }
+  }, [authenticatedFetch, backendUrl, isAuthenticated]);
 
   useEffect(() => {
-    const persistLikedSongs = async () => {
-      try {
-        await AsyncStorage.setItem('@likedSongs', JSON.stringify(likedSongs));
-      } catch (e) {
-        console.error('Failed to save liked songs', e);
-      }
-    };
-    persistLikedSongs();
-  }, [likedSongs]);
+    fetchLikedSongs();
+  }, [fetchLikedSongs]);
 
-  const toggleLikeSong = useCallback((song) => {
+  const toggleLikeSong = useCallback(async (song) => {
     const id = getSongId(song);
-    setLikedSongs((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter(item => item !== id);
-      } else {
-        return [...prev, id];
-      }
-    });
-  }, []);
+    if (!id || !authenticatedFetch) return;
+
+    const safeBaseUrl = sanitizeBaseUrl(backendUrl);
+    const liked = likedSongs.includes(id);
+    setLikedSongs((prev) => (
+      liked ? prev.filter(item => item !== id) : [...prev, id]
+    ));
+
+    try {
+      const response = await authenticatedFetch(
+        liked ? `${safeBaseUrl}/likes/${encodeURIComponent(id)}` : `${safeBaseUrl}/likes`,
+        liked
+          ? { method: 'DELETE' }
+          : {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ songId: id }),
+          }
+      );
+
+      if (!response.ok) throw new Error('Failed to update liked songs');
+    } catch (error) {
+      setLikedSongs((prev) => (
+        liked ? [...prev, id] : prev.filter(item => item !== id)
+      ));
+      Alert.alert('Error', 'Failed to update liked songs');
+    }
+  }, [authenticatedFetch, backendUrl, likedSongs]);
 
   const isSongLiked = useCallback((song) => {
     return likedSongs.includes(getSongId(song));
@@ -47,6 +64,7 @@ export function useLikedSongs() {
 
   return {
     likedSongs,
+    fetchLikedSongs,
     toggleLikeSong,
     isSongLiked,
   };

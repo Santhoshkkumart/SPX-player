@@ -5,23 +5,24 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "create-admin": "node server/create-admin.js",
+    "tunnel": "npx localtunnel --port 3000"
   },
-  "keywords": [
-    "music",
-    "streaming",
-    "lan",
-    "spotify"
-  ],
+  "keywords": ["music", "streaming", "lan", "spotify"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "expo": "^57.0.4",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "music-metadata": "^11.12.3"
   }

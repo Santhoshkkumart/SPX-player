@@ -7,12 +7,30 @@ const QUICK_ADDRESSES = [
   { label: 'Localhost', url: 'http://localhost:3000' },
 ];
 
-export function SettingsModal({ tempUrl, onUrlChange, onTest, onCancel, onSave, defaultUrl }) {
+export function SettingsModal({ tempUrl, onUrlChange, onTest, onCancel, onSave, defaultUrl, currentUser, onLogout }) {
   return (
     <View style={styles.overlay}>
       <BlurView intensity={80} tint="dark" style={styles.modal}>
         <ScrollView showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>Server Settings</Text>
+
+          {currentUser && (
+            <View style={styles.userRow}>
+              <View style={styles.userInfo}>
+                <Text style={styles.userLabel}>Signed in as</Text>
+                <Text style={styles.userName} numberOfLines={1}>
+                  {currentUser.username}
+                  {currentUser.role === 'admin' ? ' (Admin)' : ''}
+                </Text>
+                <Text style={styles.userEmail} numberOfLines={1}>{currentUser.email}</Text>
+              </View>
+              {onLogout && (
+                <TouchableOpacity style={styles.logoutBtn} onPress={onLogout}>
+                  <Text style={styles.logoutText}>Sign Out</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           <View style={styles.setupGuide}>
             <Text style={styles.setupTitle}>How to connect:</Text>
@@ -261,5 +279,51 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 11,
     fontWeight: '600',
+  },
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(99,102,241,0.10)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.25)',
+    gap: 10,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userLabel: {
+    color: '#6366f1',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  userName: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  userEmail: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  logoutBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: 'rgba(244,63,94,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(244,63,94,0.3)',
+  },
+  logoutText: {
+    color: '#f43f5e',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

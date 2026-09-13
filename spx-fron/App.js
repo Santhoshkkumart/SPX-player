@@ -15,6 +15,7 @@ import {
   Alert,
   useWindowDimensions,
 } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -34,6 +35,7 @@ import { useAudio } from './hooks/useAudio';
 import { useSongs } from './hooks/useSongs';
 import { usePlaylists } from './hooks/usePlaylists';
 import { useLikedSongs } from './hooks/useLikedSongs';
+import { useAuth } from './hooks/useAuth';
 
 // Components
 import { MiniPlayer } from './components/MiniPlayer';
@@ -41,6 +43,7 @@ import { SongRow } from './components/SongRow';
 import { PlaylistCard } from './components/PlaylistCard';
 import { PlayerView } from './screens/PlayerView';
 import { SettingsModal, CreatePlaylistModal, AddToPlaylistModal } from './components/Modals';
+import { AuthScreen } from './components/AuthScreen';
 
 // Utils
 import { 
@@ -61,7 +64,9 @@ const getDefaultBackendUrl = () => {
   return DEFAULT_BACKEND_URL;
 };
 
-export default function App() {
+function App() {
+  const initialBackendUrl = getDefaultBackendUrl();
+  const auth = useAuth(initialBackendUrl);
   const { width: liveWidth, height: liveHeight } = useWindowDimensions();
   const isLandscape = liveWidth > liveHeight;
   const isCompactDevice = liveWidth < 380;
@@ -78,7 +83,7 @@ export default function App() {
     backendUrl, 
     setBackendUrl, 
     fetchSongs 
-  } = useSongs(getDefaultBackendUrl());
+  } = useSongs(initialBackendUrl, auth.authenticatedFetch);
   
   const { 
     currentSong, 
@@ -100,13 +105,14 @@ export default function App() {
     addSongToPlaylist, 
     removeSongFromPlaylist, 
     deletePlaylist 
-  } = usePlaylists(backendUrl);
+  } = usePlaylists(backendUrl, auth.authenticatedFetch);
 
-  const { 
-    likedSongs, 
-    toggleLikeSong, 
-    isSongLiked 
-  } = useLikedSongs();
+  const {
+    likedSongs,
+    fetchLikedSongs,
+    toggleLikeSong,
+    isSongLiked
+  } = useLikedSongs(backendUrl, auth.authenticatedFetch, auth.isAuthenticated);
 
   // Local UI state
   const [view, setView] = useState('home'); // 'home' or 'player'
@@ -142,14 +148,16 @@ export default function App() {
 
   // Effects
   useEffect(() => {
-    // Only auto-fetch on mount if we already have a configured URL
-    const initialUrl = getDefaultBackendUrl();
-    if (initialUrl) {
-      fetchSongs(initialUrl);
-      fetchPlaylists(initialUrl);
+    auth.setBackendUrlRef(backendUrl);
+  }, [auth, backendUrl]);
+
+  useEffect(() => {
+    if (auth.isAuthenticated && backendUrl) {
+      fetchSongs(backendUrl);
+      fetchPlaylists(backendUrl);
+      fetchLikedSongs(backendUrl);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount only
+  }, [auth.isAuthenticated, backendUrl, fetchSongs, fetchPlaylists, fetchLikedSongs]);
 
   useEffect(() => {
     const onBackPress = () => {
@@ -174,8 +182,12 @@ export default function App() {
   const saveSettings = () => {
     if (tempUrl.trim()) {
       setBackendUrl(tempUrl.trim());
-      fetchSongs(tempUrl.trim());
-      fetchPlaylists(tempUrl.trim());
+      auth.setBackendUrlRef(tempUrl.trim());
+      if (auth.isAuthenticated) {
+        fetchSongs(tempUrl.trim());
+        fetchPlaylists(tempUrl.trim());
+        fetchLikedSongs(tempUrl.trim());
+      }
     }
     setShowSettings(false);
   };
@@ -291,6 +303,9 @@ export default function App() {
           {
             fieldName: 'song',
             httpMethod: 'POST',
+            headers: {
+              Authorization: `Bearer ${auth.accessToken}`,
+            },
             uploadType: FileSystem.FileSystemUploadType.MULTIPART,
             mimeType: mimeType,
             parameters: {
@@ -316,7 +331,7 @@ export default function App() {
           type: String(mimeType),
         });
 
-        const response = await fetch(`${safeBaseUrl}/upload`, {
+        const response = await auth.authenticatedFetch(`${safeBaseUrl}/upload`, {
           method: 'POST',
           body: formData,
         });
@@ -337,28 +352,60 @@ export default function App() {
     }
   };
 
+  if (auth.authLoading) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#fff" />
+            <Text style={styles.loadingText}>Restoring session...</Text>
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
+  if (!auth.isAuthenticated) {
+    return (
+      <SafeAreaProvider>
+        <AuthScreen
+          mode={auth.authMode}
+          error={auth.authError}
+          loading={auth.authLoading}
+          backendUrl={backendUrl}
+          onModeChange={auth.setAuthMode}
+          onLogin={auth.login}
+          onRegister={auth.register}
+        />
+      </SafeAreaProvider>
+    );
+  }
+
   if (view === 'player') {
     return (
-      <PlayerView 
-        currentSong={currentSong}
-        isPlaying={isPlaying}
-        position={position}
-        duration={duration}
-        isLiked={isSongLiked(currentSong)}
-        onTogglePlayPause={togglePlayPause}
-        onNext={playNextSong}
-        onPrevious={playPreviousSong}
-        onSeek={seekTo}
-        onToggleLike={toggleLikeSong}
-        onClose={() => setView('home')}
-        backendUrl={backendUrl}
-        isLandscape={isLandscape}
-        topInset={topInset}
-      />
+      <SafeAreaProvider>
+        <PlayerView
+          currentSong={currentSong}
+          isPlaying={isPlaying}
+          position={position}
+          duration={duration}
+          isLiked={isSongLiked(currentSong)}
+          onTogglePlayPause={togglePlayPause}
+          onNext={playNextSong}
+          onPrevious={playPreviousSong}
+          onSeek={seekTo}
+          onToggleLike={toggleLikeSong}
+          onClose={() => setView('home')}
+          backendUrl={backendUrl}
+          isLandscape={isLandscape}
+          topInset={topInset}
+        />
+      </SafeAreaProvider>
     );
   }
 
   return (
+    <SafeAreaProvider>
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
       <View style={[styles.container, { paddingTop: topInset, paddingHorizontal: isLandscape ? 18 : 24 }]}>
@@ -375,7 +422,7 @@ export default function App() {
                 <View style={{ width: 24 }} />
               </View>
 
-              <Text style={styles.greeting}>Hello <Text style={styles.bold}>Santhosh</Text></Text>
+              <Text style={styles.greeting}>Hello <Text style={styles.bold}>{auth.user?.username || 'Santhosh'}</Text></Text>
               <Text style={styles.subGreeting}>Find the best music for today</Text>
 
               <View style={styles.searchContainer}>
@@ -391,6 +438,7 @@ export default function App() {
                 </BlurView>
               </View>
 
+              {auth.user?.role === 'admin' && (
               <View style={styles.uploadRow}>
                 <View style={styles.uploadCard}>
                   <View style={styles.uploadCopy}>
@@ -414,6 +462,7 @@ export default function App() {
                   </TouchableOpacity>
                 </View>
               </View>
+              )}
 
               <Text style={styles.sectionTitle}>Popular Playlist</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.playlistScroll}>
@@ -581,6 +630,8 @@ export default function App() {
           onCancel={() => setShowSettings(false)}
           onSave={saveSettings}
           defaultUrl={getDefaultBackendUrl()}
+          currentUser={auth.user}
+          onLogout={auth.logout}
         />
       )}
 
@@ -644,6 +695,7 @@ export default function App() {
         </View>
       )}
     </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
@@ -909,3 +961,47 @@ const styles = StyleSheet.create({
     marginTop: 100,
   },
 });
+
+class ErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('App ErrorBoundary caught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <SafeAreaProvider>
+          <SafeAreaView style={{ flex: 1, backgroundColor: '#050816', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <Text style={{ color: '#ef4444', fontSize: 22, fontWeight: 'bold', marginBottom: 12, textAlign: 'center' }}>
+              SPX Player Error
+            </Text>
+            <Text style={{ color: '#94a3b8', fontSize: 14, textAlign: 'center', marginBottom: 24 }}>
+              {this.state.error?.message || this.state.error?.toString() || 'An unexpected error occurred.'}
+            </Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#6366f1', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12 }}
+              onPress={() => this.setState({ hasError: false, error: null })}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Try Again</Text>
+            </TouchableOpacity>
+          </SafeAreaView>
+        </SafeAreaProvider>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function AppWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}

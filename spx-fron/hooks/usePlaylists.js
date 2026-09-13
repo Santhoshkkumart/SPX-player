@@ -1,14 +1,15 @@
-import { useState, useCallback } from 'react';
+﻿import { useState, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { sanitizeBaseUrl } from '../utils/helpers';
 
-export function usePlaylists(backendUrl) {
+export function usePlaylists(backendUrl, authenticatedFetch) {
   const [playlists, setPlaylists] = useState([]);
 
   const fetchPlaylists = useCallback(async (baseUrl = backendUrl) => {
     const safeBaseUrl = sanitizeBaseUrl(baseUrl);
+    const request = authenticatedFetch || fetch;
     try {
-      const response = await fetch(`${safeBaseUrl}/playlists`);
+      const response = await request(`${safeBaseUrl}/playlists`);
       if (response.ok) {
         const data = await response.json();
         setPlaylists(Array.isArray(data) ? data : []);
@@ -16,13 +17,14 @@ export function usePlaylists(backendUrl) {
     } catch (error) {
       console.error('Failed to fetch playlists:', error);
     }
-  }, [backendUrl]);
+  }, [authenticatedFetch, backendUrl]);
 
   const createPlaylist = useCallback(async (name) => {
-    if (!name.trim()) return;
+    if (!name.trim()) return false;
     const safeBaseUrl = sanitizeBaseUrl(backendUrl);
+    const request = authenticatedFetch || fetch;
     try {
-      const response = await fetch(`${safeBaseUrl}/playlists`, {
+      const response = await request(`${safeBaseUrl}/playlists`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim() }),
@@ -30,30 +32,30 @@ export function usePlaylists(backendUrl) {
       if (response.ok) {
         fetchPlaylists();
         return true;
-      } else {
-        const error = await response.json();
-        Alert.alert('Error', error.error || 'Failed to create playlist');
-        return false;
       }
+      const error = await response.json().catch(() => ({}));
+      Alert.alert('Error', error.error || 'Failed to create playlist');
+      return false;
     } catch (error) {
       Alert.alert('Error', 'Could not connect to server');
       return false;
     }
-  }, [backendUrl, fetchPlaylists]);
+  }, [authenticatedFetch, backendUrl, fetchPlaylists]);
 
   const addSongToPlaylist = useCallback(async (playlistId, songId) => {
     const playlist = playlists.find(p => p.id === playlistId);
-    if (!playlist) return;
+    if (!playlist) return false;
 
     if (playlist.songs.includes(songId)) {
       Alert.alert('Info', 'Song already in playlist');
-      return;
+      return false;
     }
 
     const updatedSongs = [...playlist.songs, songId];
     const safeBaseUrl = sanitizeBaseUrl(backendUrl);
+    const request = authenticatedFetch || fetch;
     try {
-      const response = await fetch(`${safeBaseUrl}/playlists/${playlistId}`, {
+      const response = await request(`${safeBaseUrl}/playlists/${playlistId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ songs: updatedSongs }),
@@ -67,16 +69,17 @@ export function usePlaylists(backendUrl) {
       Alert.alert('Error', 'Failed to add song to playlist');
     }
     return false;
-  }, [backendUrl, playlists, fetchPlaylists]);
+  }, [authenticatedFetch, backendUrl, playlists, fetchPlaylists]);
 
   const removeSongFromPlaylist = useCallback(async (playlistId, songId) => {
     const playlist = playlists.find(p => p.id === playlistId);
-    if (!playlist) return;
+    if (!playlist) return null;
 
     const updatedSongs = playlist.songs.filter(id => id !== songId);
     const safeBaseUrl = sanitizeBaseUrl(backendUrl);
+    const request = authenticatedFetch || fetch;
     try {
-      const response = await fetch(`${safeBaseUrl}/playlists/${playlistId}`, {
+      const response = await request(`${safeBaseUrl}/playlists/${playlistId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ songs: updatedSongs }),
@@ -90,12 +93,13 @@ export function usePlaylists(backendUrl) {
       Alert.alert('Error', 'Failed to remove song');
     }
     return null;
-  }, [backendUrl, playlists, fetchPlaylists]);
+  }, [authenticatedFetch, backendUrl, playlists, fetchPlaylists]);
 
   const deletePlaylist = useCallback(async (playlistId) => {
     const safeBaseUrl = sanitizeBaseUrl(backendUrl);
+    const request = authenticatedFetch || fetch;
     try {
-      const response = await fetch(`${safeBaseUrl}/playlists/${playlistId}`, {
+      const response = await request(`${safeBaseUrl}/playlists/${playlistId}`, {
         method: 'DELETE',
       });
       if (response.ok) {
@@ -106,7 +110,7 @@ export function usePlaylists(backendUrl) {
       Alert.alert('Error', 'Failed to delete playlist');
     }
     return false;
-  }, [backendUrl, fetchPlaylists]);
+  }, [authenticatedFetch, backendUrl, fetchPlaylists]);
 
   return {
     playlists,

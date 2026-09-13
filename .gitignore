@@ -1,4 +1,4 @@
-# ==========================================
+﻿# ==========================================
 # Dependencies
 # ==========================================
 node_modules/
@@ -50,6 +50,7 @@ spx-fron/ios/DerivedData/
 spx-bend/music/*
 !spx-bend/music/.gitkeep
 spx-bend/.uploads/
+spx-bend/data/
 spx-bend/playlists.json
 playlists.json
 
@@ -96,3 +97,4 @@ coverage/
 *.swo
 .DS_Store
 Thumbs.db
+

@@ -1,13 +1,12 @@
-import { useState, useCallback, useRef } from 'react';
+﻿import { useState, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import { sanitizeBaseUrl } from '../utils/helpers';
 
-export function useSongs(initialBackendUrl) {
+export function useSongs(initialBackendUrl, authenticatedFetch) {
   const [songs, setSongs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [backendUrl, setBackendUrl] = useState(initialBackendUrl);
-  // Keep a stable ref to backendUrl so fetchSongs doesn't need it in deps
   const backendUrlRef = useRef(initialBackendUrl);
 
   const handleSetBackendUrl = useCallback((url) => {
@@ -18,6 +17,7 @@ export function useSongs(initialBackendUrl) {
   const fetchSongs = useCallback(async (baseUrl) => {
     const resolvedUrl = baseUrl !== undefined ? baseUrl : backendUrlRef.current;
     const safeBaseUrl = sanitizeBaseUrl(resolvedUrl);
+    const request = authenticatedFetch || fetch;
     setLoading(true);
     setFetchError('');
 
@@ -25,10 +25,10 @@ export function useSongs(initialBackendUrl) {
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     try {
-      const response = await fetch(`${safeBaseUrl}/songs`, {
+      const response = await request(`${safeBaseUrl}/songs`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
@@ -40,16 +40,15 @@ export function useSongs(initialBackendUrl) {
       clearTimeout(timeoutId);
       console.error('Fetch error:', error);
 
-      // Android emulator fallback — use a FRESH controller so we don't reuse the aborted one
       if (Platform.OS === 'android' &&
           (resolvedUrl === 'http://10.0.2.2:3000' || resolvedUrl.includes('10.0.2.2'))) {
         const fallbackController = new AbortController();
         const fallbackTimeout = setTimeout(() => fallbackController.abort(), 5000);
         try {
-          const localhostResponse = await fetch('http://localhost:3000/songs', {
+          const localhostResponse = await request('http://localhost:3000/songs', {
             method: 'GET',
             headers: { 'Accept': 'application/json' },
-            signal: fallbackController.signal
+            signal: fallbackController.signal,
           });
           clearTimeout(fallbackTimeout);
           if (localhostResponse.ok) {
@@ -73,7 +72,7 @@ export function useSongs(initialBackendUrl) {
     } finally {
       setLoading(false);
     }
-  }, [handleSetBackendUrl]);
+  }, [authenticatedFetch, handleSetBackendUrl]);
 
   return {
     songs,
