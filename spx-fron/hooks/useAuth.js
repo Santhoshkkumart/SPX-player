@@ -132,11 +132,22 @@ export function useAuth(initialBackendUrl) {
   const restoreSession = useCallback(async () => {
     setAuthLoading(true);
     setAuthError('');
+
+    // Safety fallback timer to ensure app never hangs on 'Restoring session...' forever
+    const safetyTimer = setTimeout(() => {
+      setAuthLoading(false);
+    }, 4000);
+
     try {
-      const [savedAccessToken, savedRefreshToken] = await Promise.all([
+      const storagePromise = Promise.all([
         getSecureItem(ACCESS_TOKEN_KEY),
         getSecureItem(REFRESH_TOKEN_KEY),
       ]);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Storage timeout')), 2500)
+      );
+
+      const [savedAccessToken, savedRefreshToken] = await Promise.race([storagePromise, timeoutPromise]);
 
       accessTokenRef.current = savedAccessToken || '';
       refreshTokenRef.current = savedRefreshToken || '';
@@ -144,19 +155,32 @@ export function useAuth(initialBackendUrl) {
       setRefreshToken(savedRefreshToken || '');
 
       if (savedAccessToken) {
-        const response = await authenticatedFetch('/auth/me');
-        if (response.ok) {
-          const payload = await response.json();
-          setUser(payload.user || null);
-        } else if (savedRefreshToken) {
-          await refreshSession();
-        } else {
+        const controller = new AbortController();
+        const fetchTimeout = setTimeout(() => controller.abort(), 3500);
+
+        try {
+          const response = await authenticatedFetch('/auth/me', { signal: controller.signal });
+          clearTimeout(fetchTimeout);
+
+          if (response && response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            setUser(payload.user || null);
+          } else if (savedRefreshToken) {
+            await refreshSession();
+          } else {
+            await clearSession();
+          }
+        } catch (e) {
+          clearTimeout(fetchTimeout);
+          console.warn('Restore session network error or timeout:', e);
           await clearSession();
         }
       }
     } catch (err) {
+      console.warn('Restore session storage error or timeout:', err);
       await clearSession();
     } finally {
+      clearTimeout(safetyTimer);
       setAuthLoading(false);
     }
   }, [authenticatedFetch, clearSession, refreshSession]);

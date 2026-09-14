@@ -7,6 +7,7 @@
     "start": "node server/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "create-admin": "node server/create-admin.js",
+    "make-admin": "node server/make-admin.js",
     "tunnel": "npx localtunnel --port 3000"
   },
   "keywords": ["music", "streaming", "lan", "spotify"],

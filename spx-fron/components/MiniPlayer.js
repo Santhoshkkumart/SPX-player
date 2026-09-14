@@ -9,19 +9,27 @@ export function MiniPlayer({ currentSong, isPlaying, onTogglePlayPause, onPress,
 
   return (
     <BlurView intensity={80} tint="dark" style={styles.miniPlayer}>
-      <TouchableOpacity 
-        style={styles.miniPlayerContent}
-        onPress={onPress}
-      >
-        <Image source={{ uri: getCoverUrl(currentSong, backendUrl) }} style={styles.miniThumb} />
-        <View style={styles.miniInfo}>
-          <Text style={styles.miniTitle} numberOfLines={1}>{getSongTitle(currentSong)}</Text>
-          <Text style={styles.miniArtist}>Playing Now</Text>
-        </View>
-        <TouchableOpacity onPress={onTogglePlayPause}>
+      <View style={styles.miniPlayerContent}>
+        <TouchableOpacity 
+          style={styles.miniPlayerTouchable}
+          onPress={onPress}
+          activeOpacity={0.8}
+        >
+          <Image source={{ uri: getCoverUrl(currentSong, backendUrl) }} style={styles.miniThumb} />
+          <View style={styles.miniInfo}>
+            <Text style={styles.miniTitle} numberOfLines={1}>{getSongTitle(currentSong)}</Text>
+            <Text style={styles.miniArtist}>Playing Now</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.playPauseBtn} 
+          onPress={onTogglePlayPause}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          activeOpacity={0.7}
+        >
           {isPlaying ? <Pause color="#fff" size={24} /> : <Play color="#fff" size={24} />}
         </TouchableOpacity>
-      </TouchableOpacity>
+      </View>
     </BlurView>
   );
 }
@@ -44,6 +52,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
   },
+  miniPlayerTouchable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   miniThumb: {
     width: 45,
     height: 45,
@@ -52,6 +65,7 @@ const styles = StyleSheet.create({
   miniInfo: {
     flex: 1,
     marginLeft: 12,
+    marginRight: 8,
   },
   miniTitle: {
     color: '#fff',
@@ -61,5 +75,10 @@ const styles = StyleSheet.create({
   miniArtist: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
+  },
+  playPauseBtn: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

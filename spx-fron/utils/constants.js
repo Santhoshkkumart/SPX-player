@@ -1,6 +1,6 @@
 // Use the specific LAN IP for all environments
-export const ANDROID_EMULATOR_URL = 'http://192.168.31.243:3000';
-export const DEFAULT_BACKEND_URL = 'http://192.168.31.243:3000';
+export const ANDROID_EMULATOR_URL = 'http://192.168.31.84:3000';
+export const DEFAULT_BACKEND_URL = 'http://192.168.31.84:3000';
 
 export const COVER_IMAGES = [
   'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=1000&auto=format&fit=crop',

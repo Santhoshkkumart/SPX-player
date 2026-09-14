@@ -63,6 +63,7 @@ app.use(cors({
         return callback(null, true);
       }
     }
+    if (!CORS_ORIGIN || CORS_ORIGIN === '*') return callback(null, true);
     const allowed = CORS_ORIGIN.split(',').map(item => item.trim()).filter(Boolean);
     if (allowed.includes(origin)) return callback(null, true);
     return callback(new Error('CORS origin not allowed'));
@@ -331,9 +332,10 @@ app.post('/auth/register', authLimiter, async (req, res) => {
     const firstError = usernameResult.error || emailResult.error || passwordResult.error;
     if (firstError) return res.status(400).json({ error: firstError });
 
-    const passwordHash = await bcrypt.hash(passwordResult.value, 12);
-    const result = db.prepare("INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'user')")
-      .run(usernameResult.value, emailResult.value, passwordHash);
+    const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get().count;
+    const role = userCount === 0 ? 'admin' : 'user';
+    const result = db.prepare("INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)")
+      .run(usernameResult.value, emailResult.value, passwordHash, role);
     const user = db.prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(result.lastInsertRowid);
     const accessToken = signAccessToken(user);
     const refreshToken = createRefreshToken(user);
@@ -641,13 +643,25 @@ async function startServer() {
     await Promise.all([ensureMusicDir(), ensureUploadsDir()]);
     migrateLegacyPlaylistsToFirstUser();
     const localIps = getLocalIps();
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log('Server running at:');
       console.log(`  - Local:   http://localhost:${PORT}`);
       if (localIps.length > 0) localIps.forEach(ip => console.log(`  - Network: http://${ip}:${PORT}`));
       else console.log('  - Network: No active network interfaces found');
       console.log(`Storage mode: ${CLOUDINARY_CONFIGURED ? `Cloudinary (${CLOUDINARY_AUDIO_FOLDER || 'root'})` : `Local folder ${MUSIC_DIR}`}`);
     });
+
+    const shutdown = (signal) => {
+      console.log(`Received ${signal}. Shutting down server gracefully...`);
+      server.close(() => {
+        try { db.close(); } catch (e) {}
+        console.log('Server shut down cleanly.');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (err) {
     console.error('Failed to start Pulse Player server:', err);
     process.exit(1);
