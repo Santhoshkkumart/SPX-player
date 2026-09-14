@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 
-export function AuthScreen({ mode, error, loading, backendUrl, onModeChange, onLogin, onRegister }) {
+export function AuthScreen({ mode, error, loading, backendUrl, onServerUrlChange, onModeChange, onLogin, onRegister }) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,7 +31,17 @@ export function AuthScreen({ mode, error, loading, backendUrl, onModeChange, onL
         <BlurView intensity={80} tint="dark" style={styles.panel}>
           <Text style={styles.title}>SPX Player</Text>
           <Text style={styles.subtitle}>{isRegister ? 'Create your account' : 'Sign in to continue'}</Text>
-          <Text style={styles.server} numberOfLines={1}>{backendUrl}</Text>
+          
+          <Text style={styles.label}>Server URL (LAN IP)</Text>
+          <TextInput
+            style={styles.serverInput}
+            value={backendUrl}
+            onChangeText={onServerUrlChange}
+            placeholder="http://192.168.x.x:3000"
+            placeholderTextColor="#666"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
 
           {isRegister && (
             <TextInput
@@ -111,11 +121,26 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 8,
   },
-  server: {
-    color: '#666',
-    fontSize: 11,
-    textAlign: 'center',
-    marginBottom: 22,
+  label: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  serverInput: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    color: '#38bdf8',
+    fontSize: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.3)',
   },
   input: {
     backgroundColor: '#333',

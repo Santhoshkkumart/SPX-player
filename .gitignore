@@ -1,4 +1,4 @@
-﻿# ==========================================
+# ==========================================
 # Dependencies
 # ==========================================
 node_modules/
@@ -67,7 +67,7 @@ playlists.json
 !**/.env.example
 
 # ==========================================
-# Logs & Temporary Files
+# Logs, Temporary Files & Screenshots
 # ==========================================
 logs
 *.log
@@ -79,12 +79,9 @@ expo-verify.*.log
 repomix-output.xml
 error.jpeg
 *.tmp
-
-# ==========================================
-# Testing & Coverage
-# ==========================================
-coverage/
-.nyc_output/
+tmp-*
+Screenshot*
+Screenshot*.png
 
 # ==========================================
 # System & Editor Files
@@ -97,4 +94,3 @@ coverage/
 *.swo
 .DS_Store
 Thumbs.db
-

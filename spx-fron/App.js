@@ -365,6 +365,11 @@ function App() {
     );
   }
 
+  const handleServerUrlChange = (url) => {
+    setBackendUrl(url);
+    auth.setBackendUrlRef(url);
+  };
+
   if (!auth.isAuthenticated) {
     return (
       <SafeAreaProvider>
@@ -373,6 +378,7 @@ function App() {
           error={auth.authError}
           loading={auth.authLoading}
           backendUrl={backendUrl}
+          onServerUrlChange={handleServerUrlChange}
           onModeChange={auth.setAuthMode}
           onLogin={auth.login}
           onRegister={auth.register}

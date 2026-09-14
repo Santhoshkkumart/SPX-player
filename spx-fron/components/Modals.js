@@ -32,14 +32,6 @@ export function SettingsModal({ tempUrl, onUrlChange, onTest, onCancel, onSave, 
             </View>
           )}
 
-          <View style={styles.setupGuide}>
-            <Text style={styles.setupTitle}>How to connect:</Text>
-            <Text style={styles.setupStep}>1. Start the backend: <Text style={styles.code}>cd spx-bend && npm start</Text></Text>
-            <Text style={styles.setupStep}>2. Note the Network IP shown in the terminal</Text>
-            <Text style={styles.setupStep}>3. Enter it below as <Text style={styles.code}>http://192.168.x.x:3000</Text></Text>
-            <Text style={styles.setupStep}>4. Both devices must be on the same Wi-Fi</Text>
-          </View>
-
           <Text style={styles.label}>Backend URL:</Text>
           <TextInput
             style={styles.input}
@@ -51,19 +43,6 @@ export function SettingsModal({ tempUrl, onUrlChange, onTest, onCancel, onSave, 
             autoCorrect={false}
             keyboardType="url"
           />
-
-          <Text style={styles.quickLabel}>Quick fill:</Text>
-          <View style={styles.quickRow}>
-            {QUICK_ADDRESSES.map((item) => (
-              <TouchableOpacity
-                key={item.url}
-                style={styles.quickBtn}
-                onPress={() => onUrlChange(item.url)}
-              >
-                <Text style={styles.quickBtnText}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
 
           <View style={styles.buttons}>
             <TouchableOpacity style={styles.testButton} onPress={onTest}>
