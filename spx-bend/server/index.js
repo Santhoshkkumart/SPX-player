@@ -69,7 +69,7 @@ app.use(cors({
     return callback(new Error('CORS origin not allowed'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Original-Filename'],
 }));
 app.use(express.json({ limit: '100kb' }));
 
@@ -108,12 +108,41 @@ function isAudioFile(name) {
   return AUDIO_EXTENSIONS.has(path.extname(String(name || '')).toLowerCase());
 }
 
+function repairBrokenPercentEncoding(value) {
+  let text = String(value || '').trim();
+  if (!text) return '';
+
+  text = text.replace(/\+/g, ' ');
+  text = text.replace(/%20/gi, ' ');
+  text = text.replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => {
+    try {
+      return decodeURIComponent(`%${hex}`);
+    } catch (e) {
+      return ' ';
+    }
+  });
+
+  // Filenames like hans-20zimmer / hans 20zimmer after "%" was stripped.
+  text = text.replace(/[-_\s]+20(?=[-_\s]*[A-Za-z])/gi, ' ');
+  text = text.replace(/([A-Za-z])20(?=[A-Za-z])/g, '$1 ');
+
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function getUploadOriginalName(req, fallbackName) {
+  const header = req.headers['x-original-filename'];
+  if (typeof header === 'string' && header.trim()) {
+    try {
+      return repairBrokenPercentEncoding(decodeURIComponent(header.trim()));
+    } catch (e) {
+      return repairBrokenPercentEncoding(header.trim());
+    }
+  }
+  return repairBrokenPercentEncoding(fallbackName);
+}
+
 function normalizeUploadName(originalName, mimeType) {
-  let decodedName = String(originalName || 'upload');
-  try {
-    decodedName = decodeURIComponent(decodedName);
-  } catch (e) {}
-  decodedName = decodedName.replace(/%20/gi, ' ');
+  const decodedName = repairBrokenPercentEncoding(originalName) || 'upload';
 
   let ext = path.extname(decodedName).toLowerCase();
   if (!AUDIO_EXTENSIONS.has(ext)) {
@@ -153,9 +182,53 @@ function isSupportedUpload(file) {
 }
 
 function getDisplayTitle(rawName) {
-  const basename = path.basename(String(rawName || ''), path.extname(String(rawName || '')));
+  let basename = path.basename(String(rawName || ''), path.extname(String(rawName || '')));
   if (!basename) return 'Untitled Song';
-  return basename.replace(/^\d{13,}-/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() || basename;
+
+  basename = basename.replace(/^\d{13,}-/, '');
+  basename = repairBrokenPercentEncoding(basename);
+
+  return basename.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Untitled Song';
+}
+
+function cleanStoredFilename(filename) {
+  const ext = path.extname(String(filename || '')).toLowerCase() || '.mp3';
+  let base = path.basename(String(filename || ''), path.extname(String(filename || '')));
+  const stamped = /^(\d{13,})-(.*)$/.exec(base);
+  const stamp = stamped ? stamped[1] : '';
+  let rest = stamped ? stamped[2] : base;
+  rest = repairBrokenPercentEncoding(rest)
+    .replace(/[^a-z0-9\s._-]+/gi, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'track';
+  return stamp ? `${stamp}-${rest}${ext}` : `${rest}${ext}`;
+}
+
+function updateSongIdReferences(oldId, newId) {
+  if (!oldId || !newId || oldId === newId) return;
+  db.exec('BEGIN');
+  try {
+    const insertLike = db.prepare('INSERT OR IGNORE INTO likes (user_id, song_id) VALUES (?, ?)');
+    db.prepare('SELECT user_id FROM likes WHERE song_id = ?').all(oldId)
+      .forEach((row) => insertLike.run(row.user_id, newId));
+    db.prepare('DELETE FROM likes WHERE song_id = ?').run(oldId);
+
+    const insertPlaylistSong = db.prepare('INSERT OR IGNORE INTO playlist_songs (playlist_id, song_id) VALUES (?, ?)');
+    db.prepare('SELECT playlist_id FROM playlist_songs WHERE song_id = ?').all(oldId)
+      .forEach((row) => insertPlaylistSong.run(row.playlist_id, newId));
+    db.prepare('DELETE FROM playlist_songs WHERE song_id = ?').run(oldId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+function deleteSongReferences(songId) {
+  db.prepare('DELETE FROM likes WHERE song_id = ?').run(songId);
+  db.prepare('DELETE FROM playlist_songs WHERE song_id = ?').run(songId);
 }
 
 function isPathInside(target, base) {
@@ -243,12 +316,55 @@ function buildCloudinarySong(resource, req) {
   };
 }
 
+async function enrichLocalSong(song, name) {
+  const songPath = getLocalSongPath(name);
+  if (!songPath) return song;
+  try {
+    const metadata = await mm.parseFile(songPath, { skipCovers: true });
+    const tagTitle = metadata.common.title && String(metadata.common.title).trim();
+    const tagArtist = String(metadata.common.artist || metadata.common.albumartist || '').trim();
+    if (tagTitle) song.title = repairBrokenPercentEncoding(tagTitle);
+    if (tagArtist) song.artist = tagArtist;
+  } catch (e) {}
+  return song;
+}
+
 async function listLocalSongs(req) {
   await ensureMusicDir();
   const entries = await fs.promises.readdir(MUSIC_DIR, { withFileTypes: true });
-  return entries.filter(entry => entry.isFile() && isAudioFile(entry.name))
-    .map(entry => buildLocalSong(entry.name, req))
-    .sort((a, b) => a.title.localeCompare(b.title));
+  const files = entries.filter(entry => entry.isFile() && isAudioFile(entry.name));
+  const songs = await Promise.all(files.map((entry) => enrichLocalSong(buildLocalSong(entry.name, req), entry.name)));
+  return songs.sort((a, b) => a.title.localeCompare(b.title));
+}
+
+async function resyncLocalFilenames() {
+  await ensureMusicDir();
+  const entries = await fs.promises.readdir(MUSIC_DIR, { withFileTypes: true });
+  const renamed = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !isAudioFile(entry.name)) continue;
+    const cleaned = cleanStoredFilename(entry.name);
+    if (cleaned === entry.name) continue;
+
+    const fromPath = path.resolve(MUSIC_DIR, entry.name);
+    let destName = cleaned;
+    let destPath = path.resolve(MUSIC_DIR, destName);
+    const parsed = path.parse(cleaned);
+    let counter = 1;
+    while (fs.existsSync(destPath) && destName !== entry.name) {
+      destName = `${parsed.name}-${counter}${parsed.ext}`;
+      destPath = path.resolve(MUSIC_DIR, destName);
+      counter += 1;
+    }
+    if (!isPathInside(destPath, MUSIC_DIR)) continue;
+
+    await fs.promises.rename(fromPath, destPath);
+    updateSongIdReferences(entry.name, destName);
+    renamed.push({ from: entry.name, to: destName });
+  }
+
+  return renamed;
 }
 
 async function listCloudinarySongs(req) {
@@ -317,7 +433,10 @@ function getPlaylistForUser(playlistId, userId) {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-  filename: (req, file, cb) => cb(null, normalizeUploadName(file.originalname, file.mimetype)),
+  filename: (req, file, cb) => {
+    const originalName = getUploadOriginalName(req, file.originalname);
+    cb(null, normalizeUploadName(originalName, file.mimetype));
+  },
 });
 
 const upload = multer({
@@ -412,6 +531,38 @@ app.get('/songs', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Failed to list songs:', err);
     res.status(500).json({ error: 'Failed to list songs' });
+  }
+});
+
+app.post('/library/resync', requireAuth, async (req, res) => {
+  try {
+    const renamed = CLOUDINARY_CONFIGURED ? [] : await resyncLocalFilenames();
+    const songs = CLOUDINARY_CONFIGURED ? await listCloudinarySongs(req) : await listLocalSongs(req);
+    res.json({ message: 'Library resynced', renamed, songs });
+  } catch (err) {
+    console.error('Failed to resync library:', err);
+    res.status(500).json({ error: 'Failed to resync library' });
+  }
+});
+
+app.delete('/songs/:song', requireAuth, async (req, res) => {
+  const rawSong = decodeURIComponent(String(req.params.song || ''));
+  try {
+    if (CLOUDINARY_CONFIGURED) {
+      await cloudinary.uploader.destroy(rawSong, { resource_type: 'video' });
+      deleteSongReferences(rawSong);
+      return res.json({ message: 'Song deleted successfully' });
+    }
+
+    const songPath = getLocalSongPath(rawSong);
+    if (!songPath) return res.status(400).json({ error: 'Invalid song path' });
+    await fs.promises.unlink(songPath);
+    deleteSongReferences(rawSong);
+    return res.json({ message: 'Song deleted successfully' });
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'Song not found' });
+    console.error('Failed to delete song:', err);
+    return res.status(500).json({ error: 'Failed to delete song' });
   }
 });
 
@@ -541,6 +692,13 @@ app.post('/upload', requireAuth, async (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'No file was uploaded' });
 
+    const originalUploadName = getUploadOriginalName(req, req.file.originalname);
+    let tagTitle = '';
+    try {
+      const metadata = await mm.parseFile(req.file.path);
+      tagTitle = metadata.common.title?.trim() || '';
+    } catch (e) {}
+
     try {
       if (CLOUDINARY_CONFIGURED) {
         const uploaded = await cloudinary.uploader.upload(req.file.path, {
@@ -551,7 +709,11 @@ app.post('/upload', requireAuth, async (req, res) => {
           overwrite: false,
         });
         await cleanupUploadedFile(req.file.path);
-        return res.status(201).json({ message: 'Song uploaded successfully', song: buildCloudinarySong(uploaded, req) });
+        const song = buildCloudinarySong(uploaded, req);
+        song.title = repairBrokenPercentEncoding(tagTitle)
+          || getDisplayTitle(originalUploadName)
+          || song.title;
+        return res.status(201).json({ message: 'Song uploaded successfully', song });
       }
 
       await ensureMusicDir();
@@ -561,7 +723,11 @@ app.post('/upload', requireAuth, async (req, res) => {
         return res.status(403).json({ error: 'Invalid upload path' });
       }
       await fs.promises.rename(req.file.path, destinationPath);
-      return res.status(201).json({ message: 'Song uploaded successfully', song: buildLocalSong(path.basename(destinationPath), req) });
+      const song = buildLocalSong(path.basename(destinationPath), req);
+      song.title = repairBrokenPercentEncoding(tagTitle)
+        || getDisplayTitle(originalUploadName)
+        || song.title;
+      return res.status(201).json({ message: 'Song uploaded successfully', song });
     } catch (uploadErr) {
       await cleanupUploadedFile(req.file.path);
       console.error('Failed to finalize upload:', uploadErr);

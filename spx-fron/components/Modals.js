@@ -1,18 +1,41 @@
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+} from 'react-native';
 import { BlurView } from 'expo-blur';
+import { X, Plus } from 'lucide-react-native';
+import { getSongTitle } from '../utils/helpers';
 
-const QUICK_ADDRESSES = [
-  { label: 'Android Emulator', url: 'http://10.0.2.2:3000' },
-  { label: 'Localhost', url: 'http://localhost:3000' },
-];
-
-export function SettingsModal({ tempUrl, onUrlChange, onTest, onCancel, onSave, defaultUrl, currentUser, onLogout }) {
+export function SettingsModal({
+  visible,
+  tempUrl,
+  onUrlChange,
+  onTest,
+  onCancel,
+  onSave,
+  currentUser,
+  onLogout,
+}) {
   return (
-    <View style={styles.overlay}>
-      <BlurView intensity={80} tint="dark" style={styles.modal}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>Server Settings</Text>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={onCancel} />
+        <BlurView intensity={80} tint="dark" style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.title}>Settings</Text>
+            <TouchableOpacity onPress={onCancel} style={styles.closeBtn} hitSlop={12}>
+              <X color="#94a3b8" size={20} />
+            </TouchableOpacity>
+          </View>
 
           {currentUser && (
             <View style={styles.userRow}>
@@ -20,7 +43,7 @@ export function SettingsModal({ tempUrl, onUrlChange, onTest, onCancel, onSave, 
                 <Text style={styles.userLabel}>Signed in as</Text>
                 <Text style={styles.userName} numberOfLines={1}>
                   {currentUser.username}
-                  {currentUser.role === 'admin' ? ' (Admin)' : ''}
+                  {currentUser.role === 'admin' ? ' · Admin' : ''}
                 </Text>
                 <Text style={styles.userEmail} numberOfLines={1}>{currentUser.email}</Text>
               </View>
@@ -32,7 +55,7 @@ export function SettingsModal({ tempUrl, onUrlChange, onTest, onCancel, onSave, 
             </View>
           )}
 
-          <Text style={styles.label}>Backend URL:</Text>
+          <Text style={styles.label}>Backend URL</Text>
           <TextInput
             style={styles.input}
             value={tempUrl}
@@ -44,227 +67,278 @@ export function SettingsModal({ tempUrl, onUrlChange, onTest, onCancel, onSave, 
             keyboardType="url"
           />
 
-          <View style={styles.buttons}>
-            <TouchableOpacity style={styles.testButton} onPress={onTest}>
-              <Text style={styles.buttonText}>Test</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
+          <View style={styles.buttonColumn}>
             <TouchableOpacity style={styles.saveButton} onPress={onSave}>
               <Text style={styles.buttonText}>Save</Text>
             </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </BlurView>
-    </View>
-  );
-}
-
-export function CreatePlaylistModal({ name, onNameChange, onCancel, onCreate }) {
-  return (
-    <View style={styles.overlay}>
-      <BlurView intensity={80} tint="dark" style={styles.modal}>
-        <Text style={styles.title}>Create Playlist</Text>
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={onNameChange}
-          placeholder="Playlist Name"
-          placeholderTextColor="#666"
-          autoFocus
-        />
-        <View style={styles.buttons}>
-          <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.saveButton} onPress={onCreate}>
-            <Text style={styles.buttonText}>Create</Text>
-          </TouchableOpacity>
-        </View>
-      </BlurView>
-    </View>
-  );
-}
-
-export function AddToPlaylistModal({ playlists, onSelect, onClose }) {
-  return (
-    <View style={styles.overlay}>
-      <BlurView intensity={80} tint="dark" style={styles.modal}>
-        <Text style={styles.title}>Add to Playlist</Text>
-        <ScrollView style={{ maxHeight: 300 }}>
-          {playlists.length > 0 ? (
-            playlists.map((playlist, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={styles.selectItem}
-                onPress={() => onSelect(playlist.id)}
-              >
-                <Text style={styles.selectText}>{playlist.name}</Text>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity style={styles.secondaryButton} onPress={onTest}>
+                <Text style={styles.buttonText}>Test</Text>
               </TouchableOpacity>
-            ))
-          ) : (
-            <Text style={styles.emptyText}>No playlists created yet.</Text>
+              <TouchableOpacity style={styles.secondaryButton} onPress={onCancel}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </BlurView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+export function CreatePlaylistModal({ visible, name, onNameChange, onCancel, onCreate }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={onCancel} />
+        <BlurView intensity={80} tint="dark" style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.title}>Create Playlist</Text>
+            <TouchableOpacity onPress={onCancel} style={styles.closeBtn} hitSlop={12}>
+              <X color="#94a3b8" size={20} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.label}>Playlist name</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={onNameChange}
+            placeholder="Late night mix"
+            placeholderTextColor="#666"
+            autoFocus
+            maxLength={80}
+            returnKeyType="done"
+            onSubmitEditing={onCreate}
+          />
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.secondaryButton} onPress={onCancel}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.saveButton} onPress={onCreate}>
+              <Text style={styles.buttonText}>Create</Text>
+            </TouchableOpacity>
+          </View>
+        </BlurView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+export function AddToPlaylistModal({ visible, playlists, onSelect, onClose, onCreatePlaylist }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <BlurView intensity={80} tint="dark" style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.title}>Add to Playlist</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={12}>
+              <X color="#94a3b8" size={20} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
+            {playlists.length > 0 ? (
+              playlists.map((playlist) => (
+                <TouchableOpacity
+                  key={playlist.id}
+                  style={styles.selectItem}
+                  onPress={() => onSelect(playlist.id)}
+                >
+                  <Text style={styles.selectText}>{playlist.name}</Text>
+                  <Text style={styles.selectHint}>
+                    {(playlist.songs || []).length} {(playlist.songs || []).length === 1 ? 'song' : 'songs'}
+                  </Text>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>No playlists yet. Create one to add this song.</Text>
+            )}
+          </ScrollView>
+          {onCreatePlaylist && (
+            <TouchableOpacity style={styles.saveButton} onPress={onCreatePlaylist}>
+              <Plus color="#fff" size={16} />
+              <Text style={styles.buttonText}>New playlist</Text>
+            </TouchableOpacity>
           )}
-        </ScrollView>
-        <TouchableOpacity 
-          style={[styles.cancelButton, { marginTop: 20 }]} 
-          onPress={onClose}
-        >
-          <Text style={styles.cancelText}>Close</Text>
-        </TouchableOpacity>
-      </BlurView>
-    </View>
+          <TouchableOpacity style={[styles.secondaryButton, { marginTop: 10 }]} onPress={onClose}>
+            <Text style={styles.cancelText}>Close</Text>
+          </TouchableOpacity>
+        </BlurView>
+      </View>
+    </Modal>
+  );
+}
+
+export function AddSongsToPlaylistModal({ visible, songs, onAdd, onClose }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <BlurView intensity={80} tint="dark" style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.title}>Add Songs</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={12}>
+              <X color="#94a3b8" size={20} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
+            {songs.length > 0 ? (
+              songs.map((song) => (
+                <TouchableOpacity
+                  key={song.id || song.filename}
+                  style={styles.selectItem}
+                  onPress={() => onAdd(song)}
+                >
+                  <Text style={styles.selectText} numberOfLines={1}>{getSongTitle(song)}</Text>
+                  <Plus color="#38bdf8" size={18} />
+                </TouchableOpacity>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>Every song is already in this playlist.</Text>
+            )}
+          </ScrollView>
+          <TouchableOpacity style={styles.secondaryButton} onPress={onClose}>
+            <Text style={styles.cancelText}>Done</Text>
+          </TouchableOpacity>
+        </BlurView>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1000,
+    paddingHorizontal: 20,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.72)',
   },
   modal: {
-    width: '88%',
-    maxHeight: '85%',
-    backgroundColor: '#1e1e1e',
-    borderRadius: 20,
-    padding: 24,
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '78%',
+    backgroundColor: '#1a1a1f',
+    borderRadius: 24,
+    padding: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: 12,
   },
   label: {
-    color: '#aaa',
-    fontSize: 14,
+    color: '#94a3b8',
+    fontSize: 13,
     marginBottom: 8,
+    fontWeight: '600',
   },
   input: {
-    backgroundColor: '#333',
+    backgroundColor: '#2a2a32',
     color: '#fff',
     fontSize: 16,
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: '#3f3f46',
+    marginBottom: 18,
   },
-  hint: {
-    color: '#666',
-    fontSize: 12,
-    marginTop: 12,
-    marginBottom: 20,
-    lineHeight: 18,
+  buttonColumn: {
+    gap: 10,
   },
-  buttons: {
+  buttonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  testButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: '#444',
+    gap: 10,
   },
   saveButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 10,
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 14,
     backgroundColor: '#6366f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
   },
-  cancelButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: '#333',
+  secondaryButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: '#2a2a32',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
   buttonText: {
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 15,
   },
   cancelText: {
-    color: '#aaa',
+    color: '#cbd5e1',
     fontWeight: '600',
+    fontSize: 15,
+  },
+  list: {
+    maxHeight: 320,
+    marginBottom: 14,
   },
   selectItem: {
     paddingVertical: 14,
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   selectText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  selectHint: {
+    color: '#64748b',
+    fontSize: 12,
   },
   emptyText: {
     color: '#94a3b8',
     fontSize: 14,
     textAlign: 'center',
-    marginTop: 10,
-  },
-  setupGuide: {
-    backgroundColor: 'rgba(99,102,241,0.12)',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(99,102,241,0.3)',
-  },
-  setupTitle: {
-    color: '#a5b4fc',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  setupStep: {
-    color: '#94a3b8',
-    fontSize: 12,
+    marginVertical: 18,
     lineHeight: 20,
-  },
-  code: {
-    color: '#e2e8f0',
-    fontFamily: 'monospace',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  quickLabel: {
-    color: '#aaa',
-    fontSize: 12,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  quickRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
-  },
-  quickBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-  },
-  quickBtnText: {
-    color: '#94a3b8',
-    fontSize: 11,
-    fontWeight: '600',
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: 'rgba(99,102,241,0.10)',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     marginBottom: 20,
     borderWidth: 1,
@@ -275,7 +349,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userLabel: {
-    color: '#6366f1',
+    color: '#818cf8',
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',

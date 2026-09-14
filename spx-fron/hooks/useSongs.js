@@ -74,6 +74,52 @@ export function useSongs(initialBackendUrl, authenticatedFetch) {
     }
   }, [authenticatedFetch, handleSetBackendUrl]);
 
+  const resyncLibrary = useCallback(async (baseUrl) => {
+    const resolvedUrl = baseUrl !== undefined ? baseUrl : backendUrlRef.current;
+    const safeBaseUrl = sanitizeBaseUrl(resolvedUrl);
+    const request = authenticatedFetch || fetch;
+    setLoading(true);
+    setFetchError('');
+    try {
+      const response = await request(`${safeBaseUrl}/library/resync`, { method: 'POST' });
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      const data = await response.json();
+      if (Array.isArray(data.songs)) {
+        setSongs(data.songs);
+        return data;
+      }
+      await fetchSongs(safeBaseUrl);
+      return data;
+    } catch (error) {
+      console.error('Resync error:', error);
+      setFetchError('Could not resync the music library.');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [authenticatedFetch, fetchSongs]);
+
+  const deleteSong = useCallback(async (song) => {
+    const songId = typeof song === 'string' ? song : (song?.id || song?.filename);
+    if (!songId) return false;
+    const safeBaseUrl = sanitizeBaseUrl(backendUrlRef.current);
+    const request = authenticatedFetch || fetch;
+    try {
+      const response = await request(`${safeBaseUrl}/songs/${encodeURIComponent(songId)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to delete song');
+      }
+      setSongs((prev) => prev.filter((item) => (item.id || item.filename) !== songId));
+      return true;
+    } catch (error) {
+      console.error('Delete song error:', error);
+      throw error;
+    }
+  }, [authenticatedFetch]);
+
   return {
     songs,
     loading,
@@ -81,5 +127,7 @@ export function useSongs(initialBackendUrl, authenticatedFetch) {
     backendUrl,
     setBackendUrl: handleSetBackendUrl,
     fetchSongs,
+    resyncLibrary,
+    deleteSong,
   };
 }

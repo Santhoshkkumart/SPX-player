@@ -27,6 +27,8 @@ import {
   Trash2,
   ChevronLeft,
   Upload,
+  RefreshCw,
+  ListMusic,
 } from 'lucide-react-native';
 
 // Hooks
@@ -41,7 +43,7 @@ import { MiniPlayer } from './components/MiniPlayer';
 import { SongRow } from './components/SongRow';
 import { PlaylistCard } from './components/PlaylistCard';
 import { PlayerView } from './screens/PlayerView';
-import { SettingsModal, CreatePlaylistModal, AddToPlaylistModal } from './components/Modals';
+import { SettingsModal, CreatePlaylistModal, AddToPlaylistModal, AddSongsToPlaylistModal } from './components/Modals';
 import { AuthScreen } from './components/AuthScreen';
 
 // Utils
@@ -81,7 +83,9 @@ function App() {
     fetchError, 
     backendUrl, 
     setBackendUrl, 
-    fetchSongs 
+    fetchSongs,
+    resyncLibrary,
+    deleteSong,
   } = useSongs(initialBackendUrl, auth.authenticatedFetch);
   
   const { 
@@ -133,6 +137,7 @@ function App() {
   const [showAddToPlaylist, setShowAddToPlaylist] = useState(false);
   const [songToAddToPlaylist, setSongToAddToPlaylist] = useState(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [showAddSongsToPlaylist, setShowAddSongsToPlaylist] = useState(false);
 
   // Derived state
   const filteredSongs = useMemo(() => {
@@ -167,10 +172,19 @@ function App() {
   }, [auth.isAuthenticated, backendUrl, fetchSongs, fetchPlaylists, fetchLikedSongs]);
 
   useEffect(() => {
+    setSelectedPlaylist((current) => {
+      if (!current) return current;
+      const latest = playlists.find((playlist) => playlist.id === current.id);
+      return latest || null;
+    });
+  }, [playlists]);
+
+  useEffect(() => {
     const onBackPress = () => {
       if (showSettings) { setShowSettings(false); return true; }
       if (showCreatePlaylist) { setShowCreatePlaylist(false); return true; }
       if (showAddToPlaylist) { setShowAddToPlaylist(false); return true; }
+      if (showAddSongsToPlaylist) { setShowAddSongsToPlaylist(false); return true; }
       if (selectedPlaylist) { setSelectedPlaylist(null); return true; }
       if (view === 'player') { setView('home'); return true; }
       return false; // Exit app if at home
@@ -178,7 +192,7 @@ function App() {
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => subscription.remove();
-  }, [showSettings, showCreatePlaylist, showAddToPlaylist, selectedPlaylist, view]);
+  }, [showSettings, showCreatePlaylist, showAddToPlaylist, showAddSongsToPlaylist, selectedPlaylist, view]);
 
   // Handlers
   const openSettings = () => {
@@ -217,15 +231,19 @@ function App() {
   };
 
   const handleCreatePlaylist = async () => {
-    const success = await createPlaylist(newPlaylistName);
-    if (success) {
-      setNewPlaylistName('');
-      setShowCreatePlaylist(false);
+    const created = await createPlaylist(newPlaylistName);
+    if (!created) return;
+    setNewPlaylistName('');
+    setShowCreatePlaylist(false);
+    if (songToAddToPlaylist && created.id) {
+      await addSongToPlaylist(created.id, getSongId(songToAddToPlaylist));
+      setShowAddToPlaylist(false);
+      setSongToAddToPlaylist(null);
     }
   };
 
   const handleDeletePlaylist = (id) => {
-    Alert.alert('Delete Playlist', 'Are you sure?', [
+    Alert.alert('Delete Playlist', 'Are you sure you want to delete this playlist?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', onPress: () => deletePlaylist(id).then(() => setSelectedPlaylist(null)), style: 'destructive' }
     ]);
@@ -237,6 +255,46 @@ function App() {
       setShowAddToPlaylist(false);
       setSongToAddToPlaylist(null);
     }
+  };
+
+  const handleResyncLibrary = async () => {
+    try {
+      const result = await resyncLibrary();
+      fetchPlaylists();
+      fetchLikedSongs();
+      const renamedCount = Array.isArray(result?.renamed) ? result.renamed.length : 0;
+      Alert.alert(
+        'Library updated',
+        renamedCount > 0
+          ? `Refreshed the library and cleaned ${renamedCount} song name${renamedCount === 1 ? '' : 's'}.`
+          : 'Music library refreshed.'
+      );
+    } catch (error) {
+      Alert.alert('Resync failed', error.message || 'Could not refresh the music library.');
+    }
+  };
+
+  const handleDeleteSong = (song) => {
+    Alert.alert('Delete song', `Remove "${getSongTitle(song)}" from the library?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const songId = getSongId(song);
+            await deleteSong(song);
+            fetchPlaylists();
+            fetchLikedSongs();
+            if (getSongId(currentSong) === songId) {
+              setCurrentSong(null);
+            }
+          } catch (error) {
+            Alert.alert('Delete failed', error.message || 'Could not delete this song.');
+          }
+        },
+      },
+    ]);
   };
 
   const playNextSong = () => {
@@ -251,6 +309,17 @@ function App() {
     const currentIndex = getSongIndex(playbackQueue, currentSong);
     const previousIndex = currentIndex === -1 ? 0 : (currentIndex - 1 + playbackQueue.length) % playbackQueue.length;
     handlePlaySong(playbackQueue[previousIndex]);
+  };
+
+  const normalizePickerFileName = (name) => {
+    let fileName = String(name || 'song.mp3').trim();
+    fileName = fileName.replace(/\+/g, ' ').replace(/%20/gi, ' ');
+    try {
+      if (/%[0-9A-Fa-f]{2}/.test(fileName)) {
+        fileName = decodeURIComponent(fileName);
+      }
+    } catch (e) {}
+    return fileName.replace(/%20/gi, ' ').trim() || 'song.mp3';
   };
 
   const pickAndUploadSong = async () => {
@@ -282,7 +351,7 @@ function App() {
         const fileUri = asset.uri || asset.file?.uri;
         if (!fileUri || typeof fileUri !== 'string') continue;
 
-        let fileName = asset.name || 'song.mp3';
+        let fileName = normalizePickerFileName(asset.name || 'song.mp3');
         const rawMime = (asset.mimeType || '').toLowerCase();
         const fileExt = fileName.includes('.') ? fileName.substring(fileName.lastIndexOf('.')).toLowerCase() : '';
         const hasAudioExt = audioExts.includes(fileExt);
@@ -293,7 +362,12 @@ function App() {
             fileName = `${fileName}.mp3`;
           }
           const mimeType = rawMime.startsWith('audio/') ? rawMime : 'audio/mpeg';
-          validAssets.push({ uri: fileUri, name: fileName, type: mimeType });
+          validAssets.push({
+            uri: fileUri,
+            name: fileName,
+            type: mimeType,
+            size: typeof asset.size === 'number' && asset.size > 0 ? asset.size : 0,
+          });
         }
       }
 
@@ -326,13 +400,18 @@ function App() {
             if (auth.accessToken) {
               xhr.setRequestHeader('Authorization', `Bearer ${auth.accessToken}`);
             }
+            xhr.setRequestHeader('X-Original-Filename', encodeURIComponent(currentFile.name));
 
             let lastLoaded = 0;
             let lastTime = Date.now();
 
             xhr.upload.onprogress = (event) => {
-              if (event.lengthComputable && event.total > 0) {
-                const percent = Math.round((event.loaded / event.total) * 100);
+              const expectedBytes = currentFile.size > 0 ? currentFile.size : 0;
+              const totalBytes = event.lengthComputable && event.total > 0
+                ? event.total
+                : expectedBytes;
+              if (totalBytes > 0) {
+                const percent = Math.min(100, Math.round((event.loaded / totalBytes) * 100));
                 const now = Date.now();
                 const timeDiff = (now - lastTime) / 1000;
 
@@ -499,13 +578,18 @@ function App() {
           ListHeaderComponent={
             <View>
               <View style={[styles.header, { marginTop: isLandscape ? 0 : 8, marginBottom: isLandscape ? 14 : 22 }]}>
-                <TouchableOpacity onPress={openSettings}>
+                <TouchableOpacity onPress={openSettings} hitSlop={8}>
                   <Menu color="#fff" size={24} />
                 </TouchableOpacity>
                 <Text style={styles.currentUrl} numberOfLines={1}>{backendUrl}</Text>
-                <TouchableOpacity onPress={pickAndUploadSong} disabled={uploading}>
-                  <Upload color="#38bdf8" size={22} />
-                </TouchableOpacity>
+                <View style={styles.headerActions}>
+                  <TouchableOpacity onPress={handleResyncLibrary} disabled={loading || uploading} hitSlop={8}>
+                    <RefreshCw color="#38bdf8" size={22} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={pickAndUploadSong} disabled={uploading} hitSlop={8}>
+                    <Upload color="#38bdf8" size={22} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <Text style={styles.greeting}>Hello <Text style={styles.bold}>{auth.user?.username || 'Santhosh'}</Text></Text>
@@ -623,7 +707,7 @@ function App() {
                       onPress={() => setSelectedPlaylist(item)}
                     >
                       <View style={styles.playlistIconBg}>
-                        <Menu color="#fff" size={32} />
+                        <ListMusic color="#fff" size={32} />
                       </View>
                       <Text style={styles.likedTitle} numberOfLines={1}>{item.name}</Text>
                     </TouchableOpacity>
@@ -702,6 +786,7 @@ function App() {
                 setSongToAddToPlaylist(song);
                 setShowAddToPlaylist(true);
               }}
+              onDelete={handleDeleteSong}
               backendUrl={backendUrl}
             />
           )}
@@ -724,50 +809,69 @@ function App() {
         backendUrl={backendUrl}
       />
 
-      {showSettings && (
-        <SettingsModal 
+      <SettingsModal 
+          visible={showSettings}
           tempUrl={tempUrl}
           onUrlChange={setTempUrl}
           onTest={handleTestConnection}
           onCancel={() => setShowSettings(false)}
           onSave={saveSettings}
-          defaultUrl={getDefaultBackendUrl()}
           currentUser={auth.user}
           onLogout={auth.logout}
         />
-      )}
 
-      {showCreatePlaylist && (
-        <CreatePlaylistModal 
+      <CreatePlaylistModal 
+          visible={showCreatePlaylist}
           name={newPlaylistName}
           onNameChange={setNewPlaylistName}
           onCancel={() => setShowCreatePlaylist(false)}
           onCreate={handleCreatePlaylist}
         />
-      )}
 
-      {showAddToPlaylist && (
-        <AddToPlaylistModal 
+      <AddToPlaylistModal 
+          visible={showAddToPlaylist}
           playlists={playlists}
           onSelect={handleAddSongToPlaylist}
-          onClose={() => setShowAddToPlaylist(false)}
+          onClose={() => {
+            setShowAddToPlaylist(false);
+            setSongToAddToPlaylist(null);
+          }}
+          onCreatePlaylist={() => {
+            setShowAddToPlaylist(false);
+            setShowCreatePlaylist(true);
+          }}
         />
-      )}
+
+      <AddSongsToPlaylistModal
+          visible={showAddSongsToPlaylist}
+          songs={songs.filter((song) => !(selectedPlaylist?.songs || []).includes(getSongId(song)))}
+          onAdd={async (song) => {
+            if (!selectedPlaylist) return;
+            const updated = await addSongToPlaylist(selectedPlaylist.id, getSongId(song), { silent: true });
+            if (updated && updated.songs) setSelectedPlaylist(updated);
+          }}
+          onClose={() => setShowAddSongsToPlaylist(false)}
+        />
 
       {selectedPlaylist && (
         <View style={styles.playlistDetailContainer}>
           <SafeAreaView style={{ flex: 1 }}>
             <View style={styles.playlistDetailHeader}>
-              <TouchableOpacity onPress={() => setSelectedPlaylist(null)}>
+              <TouchableOpacity onPress={() => setSelectedPlaylist(null)} hitSlop={8}>
                 <ChevronLeft color="#fff" size={28} />
               </TouchableOpacity>
-              <Text style={styles.playlistDetailTitle}>{selectedPlaylist.name}</Text>
-              <TouchableOpacity onPress={() => handleDeletePlaylist(selectedPlaylist.id)}>
-                <Trash2 color="#f43f5e" size={24} />
-              </TouchableOpacity>
+              <Text style={styles.playlistDetailTitle} numberOfLines={1}>{selectedPlaylist.name}</Text>
+              <View style={styles.headerActions}>
+                <TouchableOpacity onPress={() => setShowAddSongsToPlaylist(true)} hitSlop={8}>
+                  <Plus color="#38bdf8" size={24} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDeletePlaylist(selectedPlaylist.id)} hitSlop={8}>
+                  <Trash2 color="#f43f5e" size={22} />
+                </TouchableOpacity>
+              </View>
             </View>
             <FlatList
-              data={songs.filter(s => selectedPlaylist.songs.includes(getSongId(s)))}
+              data={songs.filter(s => (selectedPlaylist.songs || []).includes(getSongId(s)))}
               keyExtractor={(item) => getSongId(item)}
               renderItem={({ item }) => (
                 <SongRow 
@@ -775,23 +879,22 @@ function App() {
                   isLiked={isSongLiked(item)}
                   onPlay={handlePlaySong}
                   onLike={toggleLikeSong}
-                  onAddClick={() => {}} // Not needed in playlist view or different action
                   backendUrl={backendUrl}
-                  // Override some actions for playlist view
                   rightAction={
                     <TouchableOpacity 
                       onPress={async () => {
                         const updatedP = await removeSongFromPlaylist(selectedPlaylist.id, getSongId(item));
                         if (updatedP) setSelectedPlaylist(updatedP);
                       }}
+                      hitSlop={8}
                     >
                       <Trash2 color="#94a3b8" size={20} />
                     </TouchableOpacity>
                   }
                 />
               )}
-              ListEmptyComponent={<Text style={styles.emptyPlaylistText}>No songs in this playlist.</Text>}
-              contentContainerStyle={{ padding: 24 }}
+              ListEmptyComponent={<Text style={styles.emptyPlaylistText}>No songs in this playlist yet. Tap + to add some.</Text>}
+              contentContainerStyle={{ padding: 24, paddingBottom: currentSong ? 180 : 40 }}
             />
           </SafeAreaView>
         </View>
@@ -813,6 +916,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
   avatar: {
     width: 38,
@@ -1091,8 +1199,11 @@ const styles = StyleSheet.create({
   },
   playlistDetailTitle: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 10,
   },
   emptyPlaylistText: {
     color: '#94a3b8',

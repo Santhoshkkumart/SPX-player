@@ -30,8 +30,9 @@ export function usePlaylists(backendUrl, authenticatedFetch) {
         body: JSON.stringify({ name: name.trim() }),
       });
       if (response.ok) {
+        const created = await response.json().catch(() => null);
         fetchPlaylists();
-        return true;
+        return created || true;
       }
       const error = await response.json().catch(() => ({}));
       Alert.alert('Error', error.error || 'Failed to create playlist');
@@ -42,16 +43,17 @@ export function usePlaylists(backendUrl, authenticatedFetch) {
     }
   }, [authenticatedFetch, backendUrl, fetchPlaylists]);
 
-  const addSongToPlaylist = useCallback(async (playlistId, songId) => {
+  const addSongToPlaylist = useCallback(async (playlistId, songId, options = {}) => {
     const playlist = playlists.find(p => p.id === playlistId);
     if (!playlist) return false;
 
-    if (playlist.songs.includes(songId)) {
-      Alert.alert('Info', 'Song already in playlist');
+    const currentSongs = Array.isArray(playlist.songs) ? playlist.songs : [];
+    if (currentSongs.includes(songId)) {
+      if (!options.silent) Alert.alert('Already added', 'This song is already in the playlist.');
       return false;
     }
 
-    const updatedSongs = [...playlist.songs, songId];
+    const updatedSongs = [...currentSongs, songId];
     const safeBaseUrl = sanitizeBaseUrl(backendUrl);
     const request = authenticatedFetch || fetch;
     try {
@@ -61,9 +63,10 @@ export function usePlaylists(backendUrl, authenticatedFetch) {
         body: JSON.stringify({ songs: updatedSongs }),
       });
       if (response.ok) {
+        const updated = await response.json().catch(() => null);
         fetchPlaylists();
-        Alert.alert('Success', 'Song added to playlist');
-        return true;
+        if (!options.silent) Alert.alert('Added', 'Song added to playlist.');
+        return updated || true;
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to add song to playlist');

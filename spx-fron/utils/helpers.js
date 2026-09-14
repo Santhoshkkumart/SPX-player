@@ -13,21 +13,40 @@ export function sanitizeBaseUrl(url) {
   return url.trim().replace(/\/+$/, '');
 }
 
+export function repairBrokenPercentEncoding(value) {
+  let text = String(value || '').trim();
+  if (!text) return '';
+
+  text = text.replace(/\+/g, ' ');
+  text = text.replace(/%20/gi, ' ');
+  text = text.replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => {
+    try {
+      return decodeURIComponent(`%${hex}`);
+    } catch (e) {
+      return ' ';
+    }
+  });
+  text = text.replace(/[-_\s]+20(?=[-_\s]*[A-Za-z])/gi, ' ');
+  text = text.replace(/([A-Za-z])20(?=[A-Za-z])/g, '$1 ');
+
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 export function getSongTitle(song) {
   if (!song) return '';
-  if (typeof song === 'string') return song;
+  if (typeof song === 'string') {
+    return repairBrokenPercentEncoding(song.replace(/^\d{13,}-/, '').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ')) || song;
+  }
 
-  if (song.title) return song.title;
+  if (song.title) return repairBrokenPercentEncoding(song.title);
 
   const rawName = song.name || song.filename;
   if (!rawName) return 'Untitled Song';
 
   const withoutExtension = rawName.replace(/\.[^.]+$/, '');
-  const withoutUploadSuffix = withoutExtension
-    .replace(/[-_ ]+\d{8,}$/, '')
-    .replace(/[-_ ]+[a-f0-9]{6,}$/, '');
-
-  return withoutUploadSuffix.replace(/[-_]+/g, ' ').trim() || withoutExtension;
+  const withoutTimestamp = withoutExtension.replace(/^\d{13,}-/, '');
+  const repaired = repairBrokenPercentEncoding(withoutTimestamp.replace(/[-_]+/g, ' '));
+  return repaired || 'Untitled Song';
 }
 
 export function getSongArtist(song) {
