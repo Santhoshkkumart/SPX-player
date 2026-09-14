@@ -94,10 +94,10 @@ export function useAudio(backendUrl) {
         playerRef.current = null;
       }
 
-      // Create new player
+      // Create new player with instant high-fidelity streaming
       const player = createAudioPlayer(
         { uri: streamUrl },
-        { updateInterval: 250, downloadFirst: true }
+        { updateInterval: 250 }
       );
       playerRef.current = player;
 

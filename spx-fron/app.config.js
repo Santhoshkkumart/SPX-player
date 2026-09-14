@@ -16,6 +16,7 @@ module.exports = {
       'expo-status-bar',
       'expo-audio',
       'expo-asset',
+      './plugins/withNetworkSecurityConfig',
     ],
     assetBundlePatterns: ['**/*'],
     ios: {

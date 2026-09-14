@@ -18,7 +18,6 @@ import {
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { 
@@ -295,51 +294,21 @@ function App() {
 
       setUploading(true);
 
-      if (Platform.OS !== 'web') {
-        // Native mobile upload using Expo FileSystem native binary/multipart module (bypasses FormData JS errors)
-        const uploadResult = await FileSystem.uploadAsync(
-          `${safeBaseUrl}/upload`,
-          fileUri,
-          {
-            fieldName: 'song',
-            httpMethod: 'POST',
-            headers: {
-              Authorization: `Bearer ${auth.accessToken}`,
-            },
-            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-            mimeType: mimeType,
-            parameters: {
-              name: fileName,
-            },
-          }
-        );
+      const formData = new FormData();
+      formData.append('song', {
+        uri: String(fileUri),
+        name: String(fileName),
+        type: String(mimeType),
+      });
 
-        if (uploadResult.status < 200 || uploadResult.status >= 300) {
-          let errorMsg = `Upload failed with status ${uploadResult.status}`;
-          try {
-            const parsed = JSON.parse(uploadResult.body);
-            if (parsed && parsed.error) errorMsg = parsed.error;
-          } catch (e) {}
-          throw new Error(errorMsg);
-        }
-      } else {
-        // Web fallback
-        const formData = new FormData();
-        formData.append('song', {
-          uri: String(fileUri),
-          name: String(fileName),
-          type: String(mimeType),
-        });
+      const response = await auth.authenticatedFetch(`${safeBaseUrl}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
 
-        const response = await auth.authenticatedFetch(`${safeBaseUrl}/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload.error || `Upload failed with status ${response.status}`);
-        }
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `Upload failed with status ${response.status}`);
       }
 
       Alert.alert('Upload complete', `${fileName} was added to the library.`);
@@ -425,7 +394,9 @@ function App() {
                   <Menu color="#fff" size={24} />
                 </TouchableOpacity>
                 <Text style={styles.currentUrl} numberOfLines={1}>{backendUrl}</Text>
-                <View style={{ width: 24 }} />
+                <TouchableOpacity onPress={pickAndUploadSong} disabled={uploading}>
+                  <Upload color="#38bdf8" size={22} />
+                </TouchableOpacity>
               </View>
 
               <Text style={styles.greeting}>Hello <Text style={styles.bold}>{auth.user?.username || 'Santhosh'}</Text></Text>
@@ -444,7 +415,6 @@ function App() {
                 </BlurView>
               </View>
 
-              {auth.user?.role === 'admin' && (
               <View style={styles.uploadRow}>
                 <View style={styles.uploadCard}>
                   <View style={styles.uploadCopy}>
@@ -468,7 +438,6 @@ function App() {
                   </TouchableOpacity>
                 </View>
               </View>
-              )}
 
               <Text style={styles.sectionTitle}>Popular Playlist</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.playlistScroll}>

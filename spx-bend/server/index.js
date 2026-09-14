@@ -332,6 +332,7 @@ app.post('/auth/register', authLimiter, async (req, res) => {
     const firstError = usernameResult.error || emailResult.error || passwordResult.error;
     if (firstError) return res.status(400).json({ error: firstError });
 
+    const passwordHash = await bcrypt.hash(passwordResult.value, 12);
     const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get().count;
     const role = userCount === 0 ? 'admin' : 'user';
     const result = db.prepare("INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)")
@@ -510,7 +511,7 @@ app.delete('/likes/:songId', requireAuth, (req, res) => {
   }
 });
 
-app.post('/upload', requireAuth, requireAdmin, async (req, res) => {
+app.post('/upload', requireAuth, async (req, res) => {
   try {
     await ensureUploadsDir();
   } catch (err) {
