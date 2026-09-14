@@ -109,7 +109,13 @@ function isAudioFile(name) {
 }
 
 function normalizeUploadName(originalName, mimeType) {
-  let ext = path.extname(originalName || '').toLowerCase();
+  let decodedName = String(originalName || 'upload');
+  try {
+    decodedName = decodeURIComponent(decodedName);
+  } catch (e) {}
+  decodedName = decodedName.replace(/%20/gi, ' ');
+
+  let ext = path.extname(decodedName).toLowerCase();
   if (!AUDIO_EXTENSIONS.has(ext)) {
     const mime = String(mimeType || '').toLowerCase();
     if (mime.includes('wav')) ext = '.wav';
@@ -120,8 +126,14 @@ function normalizeUploadName(originalName, mimeType) {
     else ext = '.mp3';
   }
 
-  const baseName = path.basename(originalName || 'upload', path.extname(originalName || 'upload'));
-  const safeBase = baseName.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'upload';
+  const baseName = path.basename(decodedName, path.extname(decodedName));
+  const safeBase = baseName
+    .replace(/[^a-z0-9\s._-]+/gi, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'upload';
+
   return `${Date.now()}-${safeBase}${ext}`;
 }
 
@@ -135,7 +147,9 @@ function isSupportedUpload(file) {
   if (!file) return false;
   const ext = path.extname(file.originalname || '').toLowerCase();
   const mimeType = (file.mimetype || '').toLowerCase();
-  return AUDIO_EXTENSIONS.has(ext) && (SUPPORTED_MIME_TYPES.has(mimeType) || mimeType.startsWith('audio/'));
+  const isAudioExt = AUDIO_EXTENSIONS.has(ext);
+  const isAudioMime = SUPPORTED_MIME_TYPES.has(mimeType) || mimeType.startsWith('audio/') || mimeType === 'application/octet-stream';
+  return isAudioExt || isAudioMime;
 }
 
 function getDisplayTitle(rawName) {

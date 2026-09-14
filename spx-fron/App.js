@@ -119,7 +119,15 @@ function App() {
   const [filter, setFilter] = useState('all'); // 'all' or 'liked'
   const [showSettings, setShowSettings] = useState(false);
   const [tempUrl, setTempUrl] = useState('');
-  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({
+    uploading: false,
+    currentIndex: 0,
+    totalFiles: 0,
+    fileName: '',
+    percent: 0,
+    speedText: '',
+  });
+  const uploading = uploadProgress.uploading;
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [showAddToPlaylist, setShowAddToPlaylist] = useState(false);
@@ -255,69 +263,170 @@ function App() {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['audio/*', 'audio/mpeg', 'audio/mp3', 'audio/m4a', 'audio/wav', 'audio/x-wav', 'audio/aac', 'audio/flac', 'audio/ogg'],
-        multiple: false,
+        multiple: true,
         copyToCacheDirectory: true,
       });
 
       if (result.canceled) return;
 
-      const asset = (result.assets && result.assets[0]) || result;
-      if (!asset) {
+      const rawAssets = result.assets || (result.uri ? [result] : []);
+      if (!rawAssets || rawAssets.length === 0) {
         Alert.alert('Upload failed', 'No file was selected.');
         return;
       }
 
-      const fileUri = asset.uri || asset.file?.uri || result.uri;
-      if (!fileUri || typeof fileUri !== 'string') {
-        Alert.alert('Upload failed', 'Could not obtain valid file location from picker.');
-        return;
-      }
-
-      let fileName = asset.name || 'song.mp3';
-      const rawMime = (asset.mimeType || '').toLowerCase();
-
       const audioExts = ['.mp3', '.m4a', '.wav', '.flac', '.aac', '.ogg', '.oga'];
-      const fileExt = fileName.includes('.') ? fileName.substring(fileName.lastIndexOf('.')).toLowerCase() : '';
-      const hasAudioExt = audioExts.includes(fileExt);
-      const isAudioMime = rawMime.startsWith('audio/') || rawMime === 'application/octet-stream' || rawMime === '';
+      const validAssets = [];
 
-      if (!hasAudioExt && !isAudioMime) {
-        Alert.alert('Unsupported file', 'Please select a valid audio file (.mp3, .m4a, .wav, etc.).');
+      for (const asset of rawAssets) {
+        const fileUri = asset.uri || asset.file?.uri;
+        if (!fileUri || typeof fileUri !== 'string') continue;
+
+        let fileName = asset.name || 'song.mp3';
+        const rawMime = (asset.mimeType || '').toLowerCase();
+        const fileExt = fileName.includes('.') ? fileName.substring(fileName.lastIndexOf('.')).toLowerCase() : '';
+        const hasAudioExt = audioExts.includes(fileExt);
+        const isAudioMime = rawMime.startsWith('audio/') || rawMime === 'application/octet-stream' || rawMime === '';
+
+        if (hasAudioExt || isAudioMime) {
+          if (!hasAudioExt) {
+            fileName = `${fileName}.mp3`;
+          }
+          const mimeType = rawMime.startsWith('audio/') ? rawMime : 'audio/mpeg';
+          validAssets.push({ uri: fileUri, name: fileName, type: mimeType });
+        }
+      }
+
+      if (validAssets.length === 0) {
+        Alert.alert('Unsupported file(s)', 'Please select valid audio files (.mp3, .m4a, .wav, etc.).');
         return;
       }
 
-      if (!hasAudioExt) {
-        fileName = `${fileName}.mp3`;
+      const totalFiles = validAssets.length;
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < totalFiles; i++) {
+        const currentFile = validAssets[i];
+
+        setUploadProgress({
+          uploading: true,
+          currentIndex: i + 1,
+          totalFiles,
+          fileName: currentFile.name,
+          percent: 0,
+          speedText: '0 KB/s',
+        });
+
+        try {
+          await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${safeBaseUrl}/upload`);
+            xhr.setRequestHeader('Accept', 'application/json');
+            if (auth.accessToken) {
+              xhr.setRequestHeader('Authorization', `Bearer ${auth.accessToken}`);
+            }
+
+            let lastLoaded = 0;
+            let lastTime = Date.now();
+
+            xhr.upload.onprogress = (event) => {
+              if (event.lengthComputable && event.total > 0) {
+                const percent = Math.round((event.loaded / event.total) * 100);
+                const now = Date.now();
+                const timeDiff = (now - lastTime) / 1000;
+
+                if (timeDiff >= 0.25 || event.loaded === event.total) {
+                  const bytesDiff = event.loaded - lastLoaded;
+                  const bytesPerSec = timeDiff > 0 ? bytesDiff / timeDiff : 0;
+                  let speedStr = '';
+                  if (bytesPerSec >= 1024 * 1024) {
+                    speedStr = `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
+                  } else {
+                    speedStr = `${Math.round(bytesPerSec / 1024)} KB/s`;
+                  }
+
+                  setUploadProgress(prev => ({
+                    ...prev,
+                    percent,
+                    speedText: speedStr,
+                  }));
+
+                  lastLoaded = event.loaded;
+                  lastTime = now;
+                } else {
+                  setUploadProgress(prev => ({
+                    ...prev,
+                    percent,
+                  }));
+                }
+              }
+            };
+
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                successCount++;
+                resolve();
+              } else {
+                let errorMsg = `Upload failed with status ${xhr.status}`;
+                try {
+                  const parsed = JSON.parse(xhr.responseText);
+                  if (parsed && parsed.error) errorMsg = parsed.error;
+                } catch (e) {}
+                failCount++;
+                reject(new Error(errorMsg));
+              }
+            };
+
+            xhr.onerror = (e) => {
+              failCount++;
+              reject(new Error('Network connection error while uploading.'));
+            };
+
+            const formData = new FormData();
+            formData.append('song', {
+              uri: String(currentFile.uri),
+              name: String(currentFile.name),
+              type: String(currentFile.type),
+            });
+
+            xhr.send(formData);
+          });
+        } catch (err) {
+          console.error(`Error uploading ${currentFile.name}:`, err);
+        }
       }
 
-      const mimeType = rawMime.startsWith('audio/') ? rawMime : 'audio/mpeg';
-
-      setUploading(true);
-
-      const formData = new FormData();
-      formData.append('song', {
-        uri: String(fileUri),
-        name: String(fileName),
-        type: String(mimeType),
+      setUploadProgress({
+        uploading: false,
+        currentIndex: 0,
+        totalFiles: 0,
+        fileName: '',
+        percent: 0,
+        speedText: '',
       });
 
-      const response = await auth.authenticatedFetch(`${safeBaseUrl}/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || `Upload failed with status ${response.status}`);
+      if (successCount > 0) {
+        fetchSongs();
+        if (totalFiles === 1) {
+          Alert.alert('Upload complete', `${validAssets[0].name} was added to the library.`);
+        } else {
+          Alert.alert('Upload complete', `${successCount} of ${totalFiles} songs uploaded successfully.`);
+        }
+      } else if (failCount > 0) {
+        Alert.alert('Upload failed', 'Failed to upload selected file(s).');
       }
-
-      Alert.alert('Upload complete', `${fileName} was added to the library.`);
-      fetchSongs();
     } catch (error) {
+      setUploadProgress({
+        uploading: false,
+        currentIndex: 0,
+        totalFiles: 0,
+        fileName: '',
+        percent: 0,
+        speedText: '',
+      });
       console.error('Upload error:', error);
       Alert.alert('Upload failed', error.message || 'Unable to upload the selected song.');
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -417,25 +526,43 @@ function App() {
 
               <View style={styles.uploadRow}>
                 <View style={styles.uploadCard}>
-                  <View style={styles.uploadCopy}>
-                    <Text style={styles.uploadLabel}>Add music</Text>
-                    <Text style={styles.uploadHint}>Upload an MP3 from your device to stream it on the LAN server.</Text>
+                  <View style={styles.uploadCardHeader}>
+                    <View style={styles.uploadCopy}>
+                      <Text style={styles.uploadLabel}>Add music</Text>
+                      <Text style={styles.uploadHint}>Upload MP3s from your device to stream on the LAN server.</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={pickAndUploadSong}
+                      style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
+                      disabled={uploading || loading}
+                      activeOpacity={0.85}
+                    >
+                      {uploading ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Upload color="#fff" size={18} />
+                      )}
+                      <Text style={styles.uploadButtonText}>
+                        {uploading ? 'Uploading...' : 'Upload'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    onPress={pickAndUploadSong}
-                    style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
-                    disabled={uploading || loading}
-                    activeOpacity={0.85}
-                  >
-                    {uploading ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <Upload color="#fff" size={18} />
-                    )}
-                    <Text style={styles.uploadButtonText}>
-                      {uploading ? 'Uploading...' : 'Upload'}
-                    </Text>
-                  </TouchableOpacity>
+
+                  {uploadProgress.uploading && (
+                    <View style={styles.uploadProgressContainer}>
+                      <View style={styles.uploadProgressHeader}>
+                        <Text style={styles.uploadProgressTitle} numberOfLines={1}>
+                          Uploading {uploadProgress.totalFiles > 1 ? `(${uploadProgress.currentIndex}/${uploadProgress.totalFiles}) ` : ''}{uploadProgress.fileName}
+                        </Text>
+                        <Text style={styles.uploadProgressSpeed}>
+                          {uploadProgress.percent}%{uploadProgress.speedText ? ` • ${uploadProgress.speedText}` : ''}
+                        </Text>
+                      </View>
+                      <View style={styles.progressBarTrack}>
+                        <View style={[styles.progressBarFill, { width: `${uploadProgress.percent}%` }]} />
+                      </View>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -741,10 +868,48 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+    flexDirection: 'column',
+  },
+  uploadCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 14,
+  },
+  uploadProgressContainer: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  uploadProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  uploadProgressTitle: {
+    color: '#e2e8f0',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 8,
+  },
+  uploadProgressSpeed: {
+    color: '#38bdf8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  progressBarTrack: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#38bdf8',
+    borderRadius: 4,
   },
   uploadCopy: {
     flex: 1,
