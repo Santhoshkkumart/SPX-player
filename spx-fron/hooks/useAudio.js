@@ -2,10 +2,20 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { sanitizeBaseUrl, getSongStreamId, getSongId } from '../utils/helpers';
 
-export function useAudio(backendUrl) {
+export function useAudio(backendUrl, options = {}) {
   const playerRef = useRef(null);
   const statusSubscriptionRef = useRef(null);
   const currentSongRef = useRef(null);
+  const preloadedNextRef = useRef(false);
+  const isSwitchingTrackRef = useRef(false);
+
+  const onTrackFinishRef = useRef(options.onTrackFinish);
+  const onPreloadNextRef = useRef(options.onPreloadNext);
+
+  useEffect(() => {
+    onTrackFinishRef.current = options.onTrackFinish;
+    onPreloadNextRef.current = options.onPreloadNext;
+  }, [options.onTrackFinish, options.onPreloadNext]);
 
   const [currentSong, setCurrentSong] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -13,6 +23,27 @@ export function useAudio(backendUrl) {
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [audioError, setAudioError] = useState('');
+  
+  // Playback modes: repeatMode ('off' | 'all' | 'one'), isShuffle (boolean)
+  const [repeatMode, setRepeatMode] = useState('off');
+  const [isShuffle, setIsShuffle] = useState(false);
+
+  const stopCurrentPlayer = useCallback(() => {
+    if (statusSubscriptionRef.current) {
+      try {
+        statusSubscriptionRef.current.remove?.();
+      } catch (e) {}
+      statusSubscriptionRef.current = null;
+    }
+    if (playerRef.current) {
+      try {
+        const activePlayer = playerRef.current;
+        playerRef.current = null;
+        activePlayer.pause();
+        activePlayer.remove();
+      } catch (e) {}
+    }
+  }, []);
 
   useEffect(() => {
     setAudioModeAsync({
@@ -24,20 +55,20 @@ export function useAudio(backendUrl) {
     });
 
     return () => {
-      if (statusSubscriptionRef.current) {
-        try {
-          statusSubscriptionRef.current.remove?.();
-        } catch (e) {}
-        statusSubscriptionRef.current = null;
-      }
-      if (playerRef.current) {
-        try {
-          playerRef.current.pause();
-          playerRef.current.remove();
-        } catch (e) {}
-        playerRef.current = null;
-      }
+      stopCurrentPlayer();
     };
+  }, [stopCurrentPlayer]);
+
+  const toggleRepeatMode = useCallback(() => {
+    setRepeatMode(prev => {
+      if (prev === 'off') return 'all';
+      if (prev === 'all') return 'one';
+      return 'off';
+    });
+  }, []);
+
+  const toggleShuffle = useCallback(() => {
+    setIsShuffle(prev => !prev);
   }, []);
 
   const togglePlayPause = useCallback(async () => {
@@ -57,44 +88,32 @@ export function useAudio(backendUrl) {
     }
   }, []);
 
-  const handlePlaySong = useCallback(async (song) => {
+  const handlePlaySong = useCallback(async (song, forceReload = false) => {
     if (!song) return;
+    if (isSwitchingTrackRef.current) return;
 
     const activeId = getSongId(currentSongRef.current);
     const newId = getSongId(song);
 
-    // If tapping the already selected/playing song, toggle play/pause instead of spawning another player
-    if (activeId && activeId === newId && playerRef.current) {
+    // If tapping the already selected/playing song (and not force reloading), toggle play/pause
+    if (!forceReload && activeId && activeId === newId && playerRef.current) {
       togglePlayPause();
       return;
     }
 
+    isSwitchingTrackRef.current = true;
     const streamId = getSongStreamId(song);
     const streamUrl = song.streamUrl || `${sanitizeBaseUrl(backendUrl)}/stream/${encodeURIComponent(streamId)}`;
 
     setIsBuffering(true);
     setAudioError('');
+    preloadedNextRef.current = false;
 
     try {
-      // Clean up previous subscription & pause/remove previous player completely
-      if (statusSubscriptionRef.current) {
-        try {
-          statusSubscriptionRef.current.remove?.();
-        } catch (e) {}
-        statusSubscriptionRef.current = null;
-      }
+      // STOP and remove any existing player instance to prevent parallel audio playback!
+      stopCurrentPlayer();
 
-      if (playerRef.current) {
-        try {
-          playerRef.current.pause();
-          playerRef.current.remove();
-        } catch (cleanupError) {
-          console.warn('Error cleaning up previous sound:', cleanupError);
-        }
-        playerRef.current = null;
-      }
-
-      // Create new player with instant high-fidelity streaming
+      // Create new audio player
       const player = createAudioPlayer(
         { uri: streamUrl },
         { updateInterval: 250 }
@@ -104,11 +123,27 @@ export function useAudio(backendUrl) {
       const subscription = player.addListener('playbackStatusUpdate', (status) => {
         setIsPlaying(Boolean(status.playing));
         setIsBuffering(Boolean(status.isBuffering));
-        setPosition((status.currentTime || 0) * 1000);
-        setDuration((status.duration || 0) * 1000);
+        const currentPosMs = (status.currentTime || 0) * 1000;
+        const durationMs = (status.duration || 0) * 1000;
+
+        setPosition(currentPosMs);
+        setDuration(durationMs);
+
+        // Pre-buffer next track when within 10 seconds of track end
+        if (durationMs > 12000 && (durationMs - currentPosMs) <= 10000 && !preloadedNextRef.current) {
+          preloadedNextRef.current = true;
+          if (onPreloadNextRef.current) {
+            onPreloadNextRef.current();
+          }
+        }
+
         if (status.didJustFinish) {
           setIsPlaying(false);
           setPosition(0);
+          preloadedNextRef.current = false;
+          if (onTrackFinishRef.current) {
+            onTrackFinishRef.current();
+          }
         }
       });
       statusSubscriptionRef.current = subscription;
@@ -122,8 +157,9 @@ export function useAudio(backendUrl) {
       setAudioError(error.message || 'Unable to load audio.');
     } finally {
       setIsBuffering(false);
+      isSwitchingTrackRef.current = false;
     }
-  }, [backendUrl, togglePlayPause]);
+  }, [backendUrl, togglePlayPause, stopCurrentPlayer]);
 
   const seekTo = useCallback(async (millis) => {
     const player = playerRef.current;
@@ -144,6 +180,10 @@ export function useAudio(backendUrl) {
     position,
     duration,
     audioError,
+    repeatMode,
+    isShuffle,
+    toggleRepeatMode,
+    toggleShuffle,
     handlePlaySong,
     togglePlayPause,
     seekTo,

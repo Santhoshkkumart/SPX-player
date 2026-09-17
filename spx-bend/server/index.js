@@ -760,7 +760,7 @@ app.get('/stream/:song', requireMediaAccess('stream'), async (req, res) => {
     const fileSize = stats.size;
     const range = req.headers.range;
     const streamSong = (options) => {
-      const stream = fs.createReadStream(songPath, options);
+      const stream = fs.createReadStream(songPath, { ...options, highWaterMark: 256 * 1024 });
       stream.on('error', (streamErr) => {
         console.error('Stream error:', streamErr);
         if (!res.headersSent) res.status(500).json({ error: 'Failed to stream song' });
@@ -779,17 +779,35 @@ app.get('/stream/:song', requireMediaAccess('stream'), async (req, res) => {
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=86400, immutable',
       });
       streamSong({ start, end });
       return undefined;
     }
-    res.set({ 'Accept-Ranges': 'bytes', 'Content-Length': fileSize, 'Content-Type': contentType });
+    res.set({
+      'Accept-Ranges': 'bytes',
+      'Content-Length': fileSize,
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=86400, immutable',
+    });
     streamSong();
     return undefined;
   } catch (err) {
     console.error('Unable to stream song:', err);
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'Song not found' });
     return res.status(500).json({ error: 'Unable to stream song' });
+  }
+});
+
+app.get('/download/:song', requireMediaAccess('stream'), async (req, res) => {
+  const songPath = getLocalSongPath(req.params.song);
+  if (!songPath) return res.status(400).json({ error: 'Invalid song path' });
+  try {
+    const filename = path.basename(songPath);
+    res.download(songPath, filename);
+  } catch (err) {
+    console.error('Unable to download song:', err);
+    return res.status(500).json({ error: 'Unable to download song' });
   }
 });
 

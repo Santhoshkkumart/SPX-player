@@ -12,194 +12,286 @@ import {
   Pressable,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { X, Plus } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { X, Plus, Server, Check, Activity, User } from 'lucide-react-native';
 import { getSongTitle } from '../utils/helpers';
 
 export function SettingsModal({
   visible,
   tempUrl,
+  backendUrl,
   onUrlChange,
+  onChangeUrl,
   onTest,
+  onTestConnection,
   onCancel,
+  onClose,
   onSave,
   currentUser,
   onLogout,
 }) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onCancel} />
-        <BlurView intensity={80} tint="dark" style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.title}>Settings</Text>
-            <TouchableOpacity onPress={onCancel} style={styles.closeBtn} hitSlop={12}>
-              <X color="#94a3b8" size={20} />
-            </TouchableOpacity>
-          </View>
+  const urlValue = tempUrl !== undefined ? tempUrl : (backendUrl || '');
+  const handleUrlChange = onUrlChange || onChangeUrl;
+  const handleCancel = onCancel || onClose;
+  const handleTest = onTest || onTestConnection;
 
-          {currentUser && (
-            <View style={styles.userRow}>
-              <View style={styles.userInfo}>
-                <Text style={styles.userLabel}>Signed in as</Text>
-                <Text style={styles.userName} numberOfLines={1}>
-                  {currentUser.username}
-                  {currentUser.role === 'admin' ? ' · Admin' : ''}
-                </Text>
-                <Text style={styles.userEmail} numberOfLines={1}>{currentUser.email}</Text>
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleCancel}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={handleCancel} />
+        
+        {/* Luxury Obsidian Glass Container */}
+        <BlurView intensity={95} tint="dark" style={styles.clayModalContainer}>
+          <LinearGradient
+            colors={['rgba(21, 24, 40, 0.98)', 'rgba(11, 13, 20, 0.99)']}
+            style={styles.modalGradientInner}
+          >
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.modalScrollContent}
+            >
+              {/* Header */}
+              <View style={styles.modalHeader}>
+                <View style={styles.headerTitleRow}>
+                  <View style={styles.iconContainer}>
+                    <Server color="#A78BFA" size={20} />
+                  </View>
+                  <View>
+                    <Text style={styles.headerCategory}>SYSTEM SETUP</Text>
+                    <Text style={styles.title}>Server Node Settings</Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={handleCancel} style={styles.closeBtn} hitSlop={12}>
+                  <X color="#94A3B8" size={18} />
+                </TouchableOpacity>
               </View>
-              {onLogout && (
-                <TouchableOpacity style={styles.logoutBtn} onPress={onLogout}>
-                  <Text style={styles.logoutText}>Sign Out</Text>
-                </TouchableOpacity>
+
+              {/* Status Badge */}
+              <View style={styles.statusBadge}>
+                <View style={styles.statusDotPulse} />
+                <Text style={styles.statusBadgeText}>SPX High-Performance Engine • Port 3000</Text>
+              </View>
+
+              {/* User Profile Card */}
+              {currentUser && (
+                <View style={styles.userCardGlass}>
+                  <View style={styles.avatarPill}>
+                    <User color="#A78BFA" size={20} />
+                  </View>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userLabel}>ACTIVE USER</Text>
+                    <Text style={styles.userName} numberOfLines={1}>
+                      {currentUser.username}
+                      {currentUser.role === 'admin' ? ' · Admin' : ''}
+                    </Text>
+                    <Text style={styles.userEmail} numberOfLines={1}>{currentUser.email}</Text>
+                  </View>
+                  {onLogout && (
+                    <TouchableOpacity style={styles.logoutBtn} onPress={onLogout} activeOpacity={0.8}>
+                      <Text style={styles.logoutText}>Sign Out</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               )}
-            </View>
-          )}
 
-          <Text style={styles.label}>Backend URL</Text>
-          <TextInput
-            style={styles.input}
-            value={tempUrl}
-            onChangeText={onUrlChange}
-            placeholder="http://192.168.1.x:3000"
-            placeholderTextColor="#666"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-          />
+              {/* Server URL Input Box */}
+              <Text style={styles.label}>LAN BACKEND URL</Text>
+              <View style={styles.inputBox}>
+                <Server color="#A78BFA" size={18} style={{ marginLeft: 14, marginRight: 10 }} />
+                <TextInput
+                  style={styles.inputField}
+                  value={urlValue}
+                  onChangeText={handleUrlChange}
+                  placeholder="http://192.168.31.84:3000"
+                  placeholderTextColor="#64748B"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+              <Text style={styles.inputHint}>Enter your computer's local IP address on WiFi</Text>
 
-          <View style={styles.buttonColumn}>
-            <TouchableOpacity style={styles.saveButton} onPress={onSave}>
-              <Text style={styles.buttonText}>Save</Text>
-            </TouchableOpacity>
-            <View style={styles.buttonRow}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={onTest}>
-                <Text style={styles.buttonText}>Test</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.secondaryButton} onPress={onCancel}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </BlurView>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-export function CreatePlaylistModal({ visible, name, onNameChange, onCancel, onCreate }) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onCancel} />
-        <BlurView intensity={80} tint="dark" style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.title}>Create Playlist</Text>
-            <TouchableOpacity onPress={onCancel} style={styles.closeBtn} hitSlop={12}>
-              <X color="#94a3b8" size={20} />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.label}>Playlist name</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={onNameChange}
-            placeholder="Late night mix"
-            placeholderTextColor="#666"
-            autoFocus
-            maxLength={80}
-            returnKeyType="done"
-            onSubmitEditing={onCreate}
-          />
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.secondaryButton} onPress={onCancel}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={onCreate}>
-              <Text style={styles.buttonText}>Create</Text>
-            </TouchableOpacity>
-          </View>
-        </BlurView>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-export function AddToPlaylistModal({ visible, playlists, onSelect, onClose, onCreatePlaylist }) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <BlurView intensity={80} tint="dark" style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.title}>Add to Playlist</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={12}>
-              <X color="#94a3b8" size={20} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
-            {playlists.length > 0 ? (
-              playlists.map((playlist) => (
-                <TouchableOpacity
-                  key={playlist.id}
-                  style={styles.selectItem}
-                  onPress={() => onSelect(playlist.id)}
-                >
-                  <Text style={styles.selectText}>{playlist.name}</Text>
-                  <Text style={styles.selectHint}>
-                    {(playlist.songs || []).length} {(playlist.songs || []).length === 1 ? 'song' : 'songs'}
-                  </Text>
+              {/* Action Buttons */}
+              <View style={styles.buttonColumn}>
+                <TouchableOpacity onPress={onSave} activeOpacity={0.85}>
+                  <LinearGradient
+                    colors={['#8B5CF6', '#6366F1']}
+                    style={styles.saveButtonGradient}
+                  >
+                    <Check color="#FFFFFF" size={20} style={{ marginRight: 8 }} />
+                    <Text style={styles.saveButtonText}>Save & Connect</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
-              ))
-            ) : (
-              <Text style={styles.emptyText}>No playlists yet. Create one to add this song.</Text>
+
+                <View style={styles.buttonRow}>
+                  {handleTest && (
+                    <TouchableOpacity style={styles.glassBtn} onPress={handleTest} activeOpacity={0.85}>
+                      <Activity color="#A78BFA" size={16} style={{ marginRight: 6 }} />
+                      <Text style={styles.glassBtnText}>Test Signal</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity style={styles.slateBtn} onPress={handleCancel} activeOpacity={0.85}>
+                    <Text style={styles.slateBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </LinearGradient>
+        </BlurView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+export function CreatePlaylistModal({ visible, name, playlistName, onNameChange, onChangeName, onCancel, onClose, onCreate }) {
+  const nameValue = name !== undefined ? name : (playlistName || '');
+  const handleNameChange = onNameChange || onChangeName;
+  const handleCancel = onCancel || onClose;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleCancel}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={handleCancel} />
+        <BlurView intensity={95} tint="dark" style={styles.clayModalContainer}>
+          <LinearGradient
+            colors={['rgba(21, 24, 40, 0.98)', 'rgba(11, 13, 20, 0.99)']}
+            style={styles.modalGradientInner}
+          >
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.headerCategory}>COLLECTION</Text>
+                <Text style={styles.title}>Create Playlist</Text>
+              </View>
+              <TouchableOpacity onPress={handleCancel} style={styles.closeBtn} hitSlop={12}>
+                <X color="#94A3B8" size={18} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.label}>PLAYLIST TITLE</Text>
+            <View style={styles.inputBox}>
+              <TextInput
+                style={styles.inputField}
+                value={nameValue}
+                onChangeText={handleNameChange}
+                placeholder="Late Night Synthwave"
+                placeholderTextColor="#64748B"
+                autoFocus
+                maxLength={80}
+                returnKeyType="done"
+                onSubmitEditing={onCreate}
+              />
+            </View>
+            <View style={[styles.buttonRow, { marginTop: 18 }]}>
+              <TouchableOpacity style={styles.slateBtn} onPress={handleCancel} activeOpacity={0.85}>
+                <Text style={styles.slateBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex: 1 }} onPress={onCreate} activeOpacity={0.85}>
+                <LinearGradient colors={['#8B5CF6', '#6366F1']} style={[styles.saveButtonGradient, { minHeight: 48 }]}>
+                  <Text style={styles.saveButtonText}>Create</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </BlurView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+export function AddToPlaylistModal({ visible, playlists = [], song, onSelect, onSelectPlaylist, onClose, onCancel, onCreatePlaylist, onCreateNew }) {
+  const handleSelect = onSelect || onSelectPlaylist;
+  const handleClose = onClose || onCancel;
+  const handleCreate = onCreatePlaylist || onCreateNew;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+      <View style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={handleClose} />
+        <BlurView intensity={95} tint="dark" style={styles.clayModalContainer}>
+          <LinearGradient
+            colors={['rgba(21, 24, 40, 0.98)', 'rgba(11, 13, 20, 0.99)']}
+            style={styles.modalGradientInner}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.title}>Add to Playlist</Text>
+              <TouchableOpacity onPress={handleClose} style={styles.closeBtn} hitSlop={12}>
+                <X color="#94A3B8" size={18} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
+              {playlists.length > 0 ? (
+                playlists.map((playlist) => (
+                  <TouchableOpacity
+                    key={playlist.id}
+                    style={styles.selectItemGlass}
+                    onPress={() => handleSelect && handleSelect(playlist.id)}
+                  >
+                    <Text style={styles.selectText}>{playlist.name}</Text>
+                    <Text style={styles.selectHint}>
+                      {(playlist.songs || []).length} {(playlist.songs || []).length === 1 ? 'song' : 'songs'}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No playlists yet. Create one to add this track.</Text>
+              )}
+            </ScrollView>
+            {handleCreate && (
+              <TouchableOpacity onPress={handleCreate} activeOpacity={0.85}>
+                <LinearGradient colors={['#8B5CF6', '#6366F1']} style={[styles.saveButtonGradient, { minHeight: 48 }]}>
+                  <Plus color="#FFFFFF" size={18} style={{ marginRight: 6 }} />
+                  <Text style={styles.saveButtonText}>New Playlist</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             )}
-          </ScrollView>
-          {onCreatePlaylist && (
-            <TouchableOpacity style={styles.saveButton} onPress={onCreatePlaylist}>
-              <Plus color="#fff" size={16} />
-              <Text style={styles.buttonText}>New playlist</Text>
+            <TouchableOpacity style={[styles.slateBtn, { marginTop: 10 }]} onPress={handleClose} activeOpacity={0.85}>
+              <Text style={styles.slateBtnText}>Close</Text>
             </TouchableOpacity>
-          )}
-          <TouchableOpacity style={[styles.secondaryButton, { marginTop: 10 }]} onPress={onClose}>
-            <Text style={styles.cancelText}>Close</Text>
-          </TouchableOpacity>
+          </LinearGradient>
         </BlurView>
       </View>
     </Modal>
   );
 }
 
-export function AddSongsToPlaylistModal({ visible, songs, onAdd, onClose }) {
+export function AddSongsToPlaylistModal({ visible, songs = [], onAdd, onClose, onCancel }) {
+  const handleClose = onClose || onCancel;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <BlurView intensity={80} tint="dark" style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.title}>Add Songs</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={12}>
-              <X color="#94a3b8" size={20} />
+        <Pressable style={styles.backdrop} onPress={handleClose} />
+        <BlurView intensity={95} tint="dark" style={styles.clayModalContainer}>
+          <LinearGradient
+            colors={['rgba(21, 24, 40, 0.98)', 'rgba(11, 13, 20, 0.99)']}
+            style={styles.modalGradientInner}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.title}>Add Tracks</Text>
+              <TouchableOpacity onPress={handleClose} style={styles.closeBtn} hitSlop={12}>
+                <X color="#94A3B8" size={18} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
+              {songs.length > 0 ? (
+                songs.map((song) => (
+                  <TouchableOpacity
+                    key={song.id || song.filename}
+                    style={styles.selectItemGlass}
+                    onPress={() => onAdd && onAdd(song)}
+                  >
+                    <Text style={styles.selectText} numberOfLines={1}>{getSongTitle(song)}</Text>
+                    <Plus color="#A78BFA" size={18} />
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>Every track is already in this playlist.</Text>
+              )}
+            </ScrollView>
+            <TouchableOpacity style={styles.slateBtn} onPress={handleClose} activeOpacity={0.85}>
+              <Text style={styles.slateBtnText}>Done</Text>
             </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
-            {songs.length > 0 ? (
-              songs.map((song) => (
-                <TouchableOpacity
-                  key={song.id || song.filename}
-                  style={styles.selectItem}
-                  onPress={() => onAdd(song)}
-                >
-                  <Text style={styles.selectText} numberOfLines={1}>{getSongTitle(song)}</Text>
-                  <Plus color="#38bdf8" size={18} />
-                </TouchableOpacity>
-              ))
-            ) : (
-              <Text style={styles.emptyText}>Every song is already in this playlist.</Text>
-            )}
-          </ScrollView>
-          <TouchableOpacity style={styles.secondaryButton} onPress={onClose}>
-            <Text style={styles.cancelText}>Done</Text>
-          </TouchableOpacity>
+          </LinearGradient>
         </BlurView>
       </View>
     </Modal>
@@ -211,172 +303,281 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.72)',
+    backgroundColor: 'rgba(7, 9, 14, 0.82)',
   },
-  modal: {
-    width: '100%',
-    maxWidth: 420,
-    maxHeight: '78%',
-    backgroundColor: '#1a1a1f',
-    borderRadius: 24,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+  clayModalContainer: {
+    width: '94%',
+    maxWidth: 440,
+    maxHeight: '90%',
+    borderRadius: 26,
     overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    elevation: 24,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 28,
+  },
+  modalGradientInner: {
+    padding: 20,
+    flexShrink: 1,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 4,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 18,
+    marginBottom: 14,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerCategory: {
+    color: '#A78BFA',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
   },
   title: {
-    color: '#fff',
+    color: '#F8FAFC',
     fontSize: 20,
+    fontWeight: '800',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+  },
+  statusDotPulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#A78BFA',
+    marginRight: 10,
+  },
+  statusBadgeText: {
+    color: '#A78BFA',
+    fontSize: 12,
     fontWeight: '700',
-    flex: 1,
+  },
+  userCardGlass: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 18,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  avatarPill: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
-  label: {
-    color: '#94a3b8',
-    fontSize: 13,
-    marginBottom: 8,
-    fontWeight: '600',
+  userInfo: {
+    flex: 1,
+    marginRight: 10,
   },
-  input: {
-    backgroundColor: '#2a2a32',
-    color: '#fff',
-    fontSize: 16,
-    padding: 14,
-    borderRadius: 14,
+  userLabel: {
+    color: '#94A3B8',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    fontWeight: '800',
+  },
+  userName: {
+    color: '#F8FAFC',
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 1,
+  },
+  userEmail: {
+    color: '#94A3B8',
+    fontSize: 12,
+  },
+  logoutBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#3f3f46',
-    marginBottom: 18,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  logoutText: {
+    color: '#F87171',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  label: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    marginBottom: 8,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  inputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(11, 13, 20, 0.95)',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    overflow: 'hidden',
+  },
+  inputField: {
+    flex: 1,
+    paddingRight: 14,
+    paddingVertical: 13,
+    color: '#A78BFA',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  inputHint: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 6,
+    marginBottom: 16,
+    fontStyle: 'italic',
   },
   buttonColumn: {
     gap: 10,
+    marginTop: 4,
   },
   buttonRow: {
     flexDirection: 'row',
     gap: 10,
   },
-  saveButton: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: '#6366f1',
+  saveButtonGradient: {
+    width: '100%',
+    minHeight: 52,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
+    elevation: 8,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
-  secondaryButton: {
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  glassBtn: {
     flex: 1,
-    minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: '#2a2a32',
+    backgroundColor: 'rgba(139, 92, 246, 0.14)',
+    paddingVertical: 13,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
   },
-  buttonText: {
-    color: '#fff',
+  glassBtnText: {
+    color: '#A78BFA',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  slateBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    paddingVertical: 13,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+  },
+  slateBtnText: {
+    color: '#94A3B8',
     fontWeight: '700',
-    fontSize: 15,
-  },
-  cancelText: {
-    color: '#cbd5e1',
-    fontWeight: '600',
-    fontSize: 15,
+    fontSize: 14,
   },
   list: {
-    maxHeight: 320,
-    marginBottom: 14,
+    maxHeight: 240,
+    marginBottom: 16,
   },
-  selectItem: {
-    paddingVertical: 14,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+  selectItemGlass: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   selectText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
     flex: 1,
+    marginRight: 10,
   },
   selectHint: {
-    color: '#64748b',
+    color: '#94A3B8',
     fontSize: 12,
   },
   emptyText: {
-    color: '#94a3b8',
+    color: '#94A3B8',
     fontSize: 14,
     textAlign: 'center',
-    marginVertical: 18,
-    lineHeight: 20,
-  },
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(99,102,241,0.10)',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(99,102,241,0.25)',
-    gap: 10,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userLabel: {
-    color: '#818cf8',
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  userName: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  userEmail: {
-    color: '#94a3b8',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  logoutBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    backgroundColor: 'rgba(244,63,94,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(244,63,94,0.3)',
-  },
-  logoutText: {
-    color: '#f43f5e',
-    fontSize: 13,
-    fontWeight: '700',
+    paddingVertical: 20,
   },
 });
+
+
