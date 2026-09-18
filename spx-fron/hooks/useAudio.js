@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { Platform } from 'react-native';
+import { createAudioPlayer, setAudioModeAsync, requestNotificationPermissionsAsync } from 'expo-audio';
 import { sanitizeBaseUrl, getSongStreamId, getSongId } from '../utils/helpers';
 
 export function useAudio(backendUrl, options = {}) {
@@ -11,11 +12,15 @@ export function useAudio(backendUrl, options = {}) {
 
   const onTrackFinishRef = useRef(options.onTrackFinish);
   const onPreloadNextRef = useRef(options.onPreloadNext);
+  const onNextTrackRef = useRef(options.onNextTrack || options.onTrackFinish);
+  const onPreviousTrackRef = useRef(options.onPreviousTrack);
 
   useEffect(() => {
     onTrackFinishRef.current = options.onTrackFinish;
     onPreloadNextRef.current = options.onPreloadNext;
-  }, [options.onTrackFinish, options.onPreloadNext]);
+    onNextTrackRef.current = options.onNextTrack || options.onTrackFinish;
+    onPreviousTrackRef.current = options.onPreviousTrack;
+  }, [options.onTrackFinish, options.onPreloadNext, options.onNextTrack, options.onPreviousTrack]);
 
   const [currentSong, setCurrentSong] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -49,15 +54,35 @@ export function useAudio(backendUrl, options = {}) {
     setAudioModeAsync({
       playsInSilentMode: true,
       shouldPlayInBackground: true,
+      interruptionMode: 'doNotMix',
     }).catch((err) => {
       console.error('Failed to configure audio mode:', err);
       setAudioError('Failed to configure audio mode.');
     });
 
+    if (Platform.OS === 'android') {
+      requestNotificationPermissionsAsync().catch((err) => {
+        console.log('Notification permission check/request failed:', err);
+      });
+    }
+
     return () => {
       stopCurrentPlayer();
     };
   }, [stopCurrentPlayer]);
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.mediaSession) {
+      try {
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          if (onNextTrackRef.current) onNextTrackRef.current();
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          if (onPreviousTrackRef.current) onPreviousTrackRef.current();
+        });
+      } catch (e) {}
+    }
+  }, []);
 
   const toggleRepeatMode = useCallback(() => {
     setRepeatMode(prev => {
@@ -108,17 +133,58 @@ export function useAudio(backendUrl, options = {}) {
     setIsBuffering(true);
     setAudioError('');
     preloadedNextRef.current = false;
+    currentSongRef.current = song;
+    setCurrentSong(song);
 
     try {
-      // STOP and remove any existing player instance to prevent parallel audio playback!
-      stopCurrentPlayer();
+      let player = playerRef.current;
 
-      // Create new audio player
-      const player = createAudioPlayer(
+      const updateLockScreen = (activePlayer) => {
+        if (activePlayer && typeof activePlayer.setActiveForLockScreen === 'function') {
+          try {
+            activePlayer.setActiveForLockScreen(
+              true,
+              {
+                title: getSongTitle(song),
+                artist: getSongArtist(song),
+                albumTitle: 'SPX Player',
+                artworkUrl: getCoverUrl(song, backendUrl),
+              },
+              {
+                showSeekForward: true,
+                showSeekBackward: true,
+              }
+            );
+          } catch (e) {}
+        }
+      };
+
+      // If persistent player already exists, replace media source in-place to avoid duplicate notification instances
+      if (player && typeof player.replace === 'function') {
+        try {
+          player.pause();
+          player.replace({ uri: streamUrl });
+          updateLockScreen(player);
+          player.play();
+          setIsPlaying(true);
+          return;
+        } catch (replaceErr) {
+          console.warn('Replace source failed, re-creating player:', replaceErr);
+          stopCurrentPlayer();
+          player = null;
+        }
+      } else {
+        stopCurrentPlayer();
+        player = null;
+      }
+
+      // Create new audio player if no instance existed or replace failed
+      player = createAudioPlayer(
         { uri: streamUrl },
         { updateInterval: 250 }
       );
       playerRef.current = player;
+      updateLockScreen(player);
 
       const subscription = player.addListener('playbackStatusUpdate', (status) => {
         setIsPlaying(Boolean(status.playing));
@@ -149,8 +215,6 @@ export function useAudio(backendUrl, options = {}) {
       statusSubscriptionRef.current = subscription;
 
       player.play();
-      currentSongRef.current = song;
-      setCurrentSong(song);
       setIsPlaying(true);
     } catch (error) {
       console.error('Audio loading error:', error);

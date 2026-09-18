@@ -147,9 +147,22 @@ export default function App() {
     });
   }, [songs, searchQuery, filter, isSongLiked]);
 
+  const selectedPlaylistSongs = useMemo(() => {
+    if (!selectedPlaylist || !Array.isArray(selectedPlaylist.songs)) return [];
+    return selectedPlaylist.songs.map(item => {
+      if (typeof item === 'object' && item !== null && (item.id || item.filename)) return item;
+      const itemIdStr = String(item);
+      const found = songs.find(s => getSongId(s) === itemIdStr || getSongStreamId(s) === itemIdStr);
+      return found || { id: itemIdStr, filename: itemIdStr, title: getSongTitle(itemIdStr), artist: 'Unknown Artist' };
+    });
+  }, [selectedPlaylist, songs]);
+
   const playbackQueue = useMemo(() => {
+    if (selectedPlaylist && selectedPlaylistSongs.length > 0) {
+      return selectedPlaylistSongs;
+    }
     return getPlaybackQueue(songs, filteredSongs, currentSong, filter, searchQuery);
-  }, [songs, filteredSongs, currentSong, filter, searchQuery]);
+  }, [selectedPlaylist, selectedPlaylistSongs, songs, filteredSongs, currentSong, filter, searchQuery]);
 
   const likedSongItems = useMemo(() => {
     return songs.filter(song => isSongLiked(song));
@@ -188,14 +201,33 @@ export default function App() {
 
     const nextIndex = (currentIndex + 1) % queue.length;
     const nextSong = queue[nextIndex];
-    if (!nextSong) return;
-
     const streamId = getSongStreamId(nextSong);
     const safeBaseUrl = sanitizeBaseUrl(backendUrl);
     const prefetchUrl = `${safeBaseUrl}/stream/${encodeURIComponent(streamId)}`;
-
     fetch(prefetchUrl, { headers: { Range: 'bytes=0-32768' } }).catch(() => {});
   }, [backendUrl]);
+
+  const playNextSong = useCallback(() => {
+    const queue = playbackQueueRef.current;
+    if (!queue || !queue.length) return;
+    const current = currentSongRef.current;
+    const currentIndex = getSongIndex(queue, current);
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % queue.length;
+    if (queue[nextIndex]) {
+      handlePlaySongWithTracking(queue[nextIndex]);
+    }
+  }, []);
+
+  const playPreviousSong = useCallback(() => {
+    const queue = playbackQueueRef.current;
+    if (!queue || !queue.length) return;
+    const current = currentSongRef.current;
+    const currentIndex = getSongIndex(queue, current);
+    const previousIndex = currentIndex === -1 ? 0 : (currentIndex - 1 + queue.length) % queue.length;
+    if (queue[previousIndex]) {
+      handlePlaySongWithTracking(queue[previousIndex]);
+    }
+  }, []);
 
   // Audio Hook
   const { 
@@ -216,6 +248,8 @@ export default function App() {
   } = useAudio(backendUrl, {
     onTrackFinish: handleTrackFinish,
     onPreloadNext: handlePreloadNext,
+    onNextTrack: playNextSong,
+    onPreviousTrack: playPreviousSong,
   });
 
   useEffect(() => {
@@ -230,20 +264,6 @@ export default function App() {
       });
     }
     handlePlaySong(song);
-  };
-
-  const playNextSong = () => {
-    if (!playbackQueue.length) return;
-    const currentIndex = getSongIndex(playbackQueue, currentSong);
-    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % playbackQueue.length;
-    handlePlaySongWithTracking(playbackQueue[nextIndex]);
-  };
-
-  const playPreviousSong = () => {
-    if (!playbackQueue.length) return;
-    const currentIndex = getSongIndex(playbackQueue, currentSong);
-    const previousIndex = currentIndex === -1 ? 0 : (currentIndex - 1 + playbackQueue.length) % playbackQueue.length;
-    handlePlaySongWithTracking(playbackQueue[previousIndex]);
   };
 
   // Effects
@@ -713,7 +733,7 @@ export default function App() {
               </View>
 
               <FlatList
-                data={selectedPlaylist.songs || []}
+                data={selectedPlaylistSongs}
                 keyExtractor={(item) => getSongId(item)}
                 contentContainerStyle={{ paddingBottom: currentSong ? 170 : 110, paddingTop: 12 }}
                 renderItem={({ item, index }) => (

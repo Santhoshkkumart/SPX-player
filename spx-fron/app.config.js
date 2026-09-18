@@ -14,7 +14,7 @@ module.exports = {
     },
     plugins: [
       'expo-status-bar',
-      'expo-audio',
+      ['expo-audio', { enableBackgroundPlayback: true }],
       'expo-asset',
       'expo-sharing',
       './plugins/withNetworkSecurityConfig',
@@ -24,11 +24,19 @@ module.exports = {
       supportsTablet: true,
       bundleIdentifier: 'com.santhosh.spxplayer',
       icon: './assets/icon.png',
+      infoPlist: {
+        UIBackgroundModes: ['audio'],
+      },
     },
     android: {
       package: 'com.santhosh.spxplayer',
       versionCode: 1,
       usesCleartextTraffic: true,
+      permissions: [
+        'android.permission.FOREGROUND_SERVICE',
+        'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+        'android.permission.POST_NOTIFICATIONS',
+      ],
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#050816',
