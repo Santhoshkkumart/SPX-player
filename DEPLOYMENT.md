@@ -1,4 +1,4 @@
-# Pulse Player Deployment
+# SPX-player Deployment
 
 Pulse Player now supports two storage modes:
 

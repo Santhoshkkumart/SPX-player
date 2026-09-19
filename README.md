@@ -1,193 +1,182 @@
-# SPX Player 🎵
+# Pulse Player 🎵
 
-**SPX Player** is a self-hosted, high-fidelity music streaming ecosystem. It allows you to host your personal lossless and high-quality music collection on a central computer/server and stream uncompressed audio seamlessly to mobile devices, tablets, and web browsers over local Wi-Fi, Tailscale Funnel, or remote HTTPS endpoints with zero delay.
+**SPX-Player**  is a self-hosted music streaming platform. Your music lives on a server you own, an old laptop in my case, and an Android app streams, uploads, and downloads it from anywhere over a private Tailscale network. No subscription, no cloud bill.
 
----
+> **About this project:** I designed the backend, API, security model, and homelab infrastructure myself. The mobile UI was built with AI assistance (vibe-coded) so I could spend my time on the parts I wanted to learn: authentication, streaming, and self-hosting.
 
-## 🌟 Highlights & Key Features
-
-* 🎨 **Obsidian-Violet Luxury Design System**: Handcrafted UI featuring dark glass paneling (`#07090E`), ambient glow halos, claymorphic card textures, high-contrast micro-typography, and a floating bottom navigation island.
-* 📀 **Authentic Vinyl LP Turntable Deck**: Full-screen player featuring a 360° rotating vinyl LP record with concentric groove rings, centered album artwork label, silver-violet stylus tonearm overlay, and non-snapping continuous rotation physics.
-* ⚡ **High-Performance Gapless Audio Pipeline**: Zero-compression audio playback via `expo-audio` with automatic **background pre-buffering** (pre-fetches the next track 10 seconds before the current song ends for seamless queue transitions).
-* 🌐 **Universal Server Endpoint & Tailscale Support**: Seamlessly configure or switch your backend server IP (`http://192.168.x.x:5000`) or Tailscale Funnel domain (`https://your-node.ts.net`) directly from the login screen or settings modal with real-time ping latency indicators.
-* 🔐 **JWT Dual-Token Security**: Complete authentication system supporting access and refresh tokens, user registration, and secure media endpoint protection.
-* 📤 **Multi-File Batch Uploader**: Fast audio file uploader with real-time speed calculation (`MB/s` / `KB/s`), progress tracking, and server-side metadata/ID3 artwork extraction.
-* 📑 **Playlist & Library Control**: Create playlists, batch add tracks, download audio files directly to mobile device storage, delete tracks, and trigger instant server library resyncs.
-* 🔀 **Full Transport Controls**: Interactive time slider, volume control, mute toggle, shuffle, loop single (`Repeat1`), repeat queue (`Repeat`), and song like/favorite toggles.
+<!-- Add screenshots to docs/images/ and keep these paths -->
+| Login | Library | Player | Upload |
+| :---: | :---: | :---: | :---: |
+| ![Login](docs/images/login.png) | ![Library](docs/images/library.png) | ![Player](docs/images/player.png) | ![Upload](docs/images/upload.png) |
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## Features
 
-### **Frontend (`spx-fron`)**
-* **Framework**: React Native 0.76+ & Expo SDK 52 (Expo Router / Managed Workflow)
-* **Audio Engine**: `expo-audio` for low-latency streaming and background audio playback
-* **Design & Styling**: Vanilla React Native `StyleSheet`, `expo-blur` (Glassmorphic blur effects), `expo-linear-gradient` (Luxury gradients)
-* **Icons & Assets**: `lucide-react-native` vector icon suite
-* **Networking**: Fetch API with JWT Interceptor and `XMLHttpRequest` with upload progress tracking
-
-### **Backend (`spx-bend`)**
-* **Server Runtime**: Node.js & Express.js
-* **Database**: SQLite3 with automatic schema migration and initialization (`db.js`)
-* **Audio Processing**: `music-metadata` for ID3 tag extraction (Artist, Title, Album, Embedded Covers)
-* **Media Streaming**: Ranged HTTP Streaming (`206 Partial Content`) for instant playback seek capability
-* **Authentication**: `jsonwebtoken` (JWT) & `bcryptjs` password hashing
+- 🎧 **Streaming with seek support:** HTTP range requests (`206 Partial Content`), so seeking is instant.
+- 📤 **Uploads (admin):** MP3, AAC, FLAC, M4A, OGG/OGA, WAV up to 100 MB, validated by extension, MIME type, and size.
+- 🖼️ **Metadata and cover art:** ID3 tags and embedded artwork are extracted with `music-metadata`.
+- 📑 **Playlists and likes:** stored per user in SQLite.
+- 🔐 **Real authentication:** JWT access tokens, rotating refresh tokens, revocable sessions, bcrypt password hashing, and admin/user roles.
+- 🔒 **Signed media URLs:** audio and cover requests use short-lived scoped tokens instead of permanent public links.
+- 🔎 **Search, mini player, and full player screen** with portrait and landscape layouts.
+- 🔁 **Switchable server URL:** change the backend address in-app (LAN, Tailscale, or public domain).
+- ☁️ **Two storage modes:** local `music/` folder by default, or Cloudinary when credentials are set.
 
 ---
 
-## 📁 Repository Structure
+## Architecture
 
 ```text
-SPX-project/
-├── spx-fron/                         # Mobile & Web Frontend (Expo / React Native)
-│   ├── App.js                        # App root entry point, state management & main layout
-│   ├── app.config.js                 # Dynamic Expo configuration & native device permissions
-│   ├── screens/
-│   │   └── PlayerView.js             # Full-screen vinyl LP turntable deck & playback controls
-│   ├── components/
-│   │   ├── AuthScreen.js             # Login / Register & server IP input card
-│   │   ├── MiniPlayer.js             # Floating island audio mini-player capsule
-│   │   ├── SongRow.js                # Track list row with equalizer wave badge & actions
-│   │   ├── PlaylistCard.js           # Glass playlist card with gradient tags
-│   │   ├── Modals.js                 # Settings, Create Playlist, Add Tracks & Upload modals
-│   │   └── ProgressBar.js            # Custom seek slider & audio duration display
-│   ├── hooks/
-│   │   ├── useAudio.js               # Audio playback lifecycle, queueing & pre-buffering hook
-│   │   ├── useAuth.js                # JWT session management & token refresh hook
-│   │   └── useSongs.js               # Server fetch, upload, and song list state hook
-│   └── utils/
-│       └── helpers.js                # URL sanitization, ID extraction & track helpers
-│
-└── spx-bend/                         # LAN Streaming Backend (Express.js & Node.js)
-    ├── server/
-    │   ├── index.js                  # Main Express API server, routes & ranged stream handler
-    │   ├── auth.js                   # JWT middleware & media access verification
-    │   └── db.js                     # SQLite database setup & migrations
-    └── music/                        # Local directory for stored audio files & uploads
+┌──────────────────────┐        Tailscale (WireGuard)        ┌──────────────────────────────┐
+│  Android phone       │ ──────────────────────────────────► │  Ubuntu Server (old laptop)  │
+│  SPX-Player app    │   or home Wi-Fi / LAN               │                              │
+│  Expo + React Native │                                     │  Node.js + Express  :3000    │
+└──────────────────────┘                                     │    ├── SQLite (users, sessions,
+                                                             │    │           playlists, likes)
+                                                             │    └── music/  or  Cloudinary │
+                                                             └──────────────────────────────┘
 ```
 
----
+## Tech stack
 
-## 🚀 Quick Start & Installation
-
-### Prerequisites
-
-* **Node.js**: v18.0.0 or higher
-* **npm**: v9.0.0 or higher
-* **Expo Go App**: Installed on your mobile phone (iOS / Android) or an emulator (Android Studio / Xcode)
-
----
-
-### 1. Backend Setup (`spx-bend`)
-
-1. Open terminal and navigate to the backend directory:
-   ```bash
-   cd spx-bend
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Create a `.env` file (or copy `.env.example`):
-   ```bash
-   cp .env.example .env
-   ```
-   *Configure your preferred `PORT` (default `5000`) and `JWT_SECRET`.*
-
-4. Start the server:
-   ```bash
-   npm start
-   ```
-   *The backend will print your local network IP (e.g., `http://192.168.1.100:5000`).*
+| Layer | Technology |
+| :--- | :--- |
+| Mobile app | Expo SDK 57, React Native 0.86, React 19, `expo-audio`, Expo Secure Store, AsyncStorage |
+| Backend | Node.js 22+, Express 5, built-in `node:sqlite`, JWT, bcryptjs, Multer, music-metadata |
+| Hardening | Helmet, CORS allow-list, `express-rate-limit`, request size limits, path-traversal checks |
+| Storage | Local filesystem or Cloudinary (audio is stored as Cloudinary `video` resources) |
+| Infra | Ubuntu Server, SSH, Tailscale, EAS Build (Android APK) |
 
 ---
 
-### 2. Frontend Setup (`spx-fron`)
+## Homelab setup
 
-1. Open a second terminal window and navigate to the frontend directory:
+This is how the server side is set up. The app works the same on any machine that can run Node.js.
+
+1. **Install Ubuntu Server** on the old laptop and enable OpenSSH during setup.
+2. **Manage it over SSH** from your main machine: `ssh <user>@<server-lan-ip>`.
+3. **Reserve a fixed LAN IP** for the server in your router (DHCP reservation) so the address never changes.
+4. **Keep it running with the lid closed:** in `/etc/systemd/logind.conf` set `HandleLidSwitch=ignore`, then `sudo systemctl restart systemd-logind`.
+5. **Install Node.js 22 or newer and git**, then follow *Backend setup* below.
+6. **Install Tailscale** on the server and on your phone:
    ```bash
-   cd spx-fron
+   curl -fsSL https://tailscale.com/install.sh | sh
+   sudo tailscale up
    ```
+7. In the app, set the **Server URL** to `http://<tailscale-ip-or-magicdns-name>:3000`.
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start the Expo development server:
-   ```bash
-   npm start
-   ```
-   *For network tunneling across different subnets, run:*
-   ```bash
-   npm run tunnel
-   ```
-
-4. Scan the QR code with **Expo Go** on your mobile phone or press `a` for Android / `w` for Web.
-
-5. On the App Login screen, enter your **Server URL** (e.g., `http://192.168.1.100:5000`) and log in or register a new account.
+Tailscale encrypts the traffic between your devices, and no router port-forwarding is needed.
 
 ---
 
-## 📡 API Reference
+## Backend setup (`spx-bend`)
 
-### **Authentication**
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/auth/register` | Register a new user account |
-| `POST` | `/auth/login` | Authenticate user & receive JWT tokens |
-| `POST` | `/auth/refresh` | Refresh an expired access token |
-| `GET` | `/auth/me` | Fetch active user profile |
-| `POST` | `/auth/logout` | Invalidate current user session |
+```bash
+cd spx-bend
+npm install
+cp .env.example .env      # then edit .env
+npm start                 # listens on 0.0.0.0:3000
+curl http://localhost:3000/health
+```
 
-### **Songs & Streaming**
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/songs` | Fetch all available library songs |
-| `GET` | `/stream/:id` | Ranged HTTP high-fidelity audio stream (`206 Partial Content`) |
-| `GET` | `/cover/:id` | Fetch embedded song cover artwork |
-| `GET` | `/download/:id` | Direct high-speed song download endpoint |
-| `DELETE` | `/songs/:id` | Delete a song from server library |
-| `POST` | `/resync` | Trigger server directory scan & metadata resync |
+Generate strong secrets (required in production, at least 32 characters each):
 
-### **Playlists**
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/playlists` | Fetch user playlists |
-| `POST` | `/playlists` | Create a new playlist |
-| `POST` | `/playlists/:id/songs` | Add track to playlist |
-| `DELETE` | `/playlists/:id/songs/:songId` | Remove track from playlist |
-| `DELETE` | `/playlists/:id` | Delete entire playlist |
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+```
 
-### **Upload & System**
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/upload` | Multipart audio file upload endpoint |
-| `GET` | `/health` | Server status and connectivity health check |
+Create the first admin (only admins can upload):
+
+```bash
+# set FIRST_ADMIN_USERNAME / FIRST_ADMIN_EMAIL / FIRST_ADMIN_PASSWORD in .env
+npm run create-admin
+
+# or promote an existing user
+npm run make-admin -- <username>
+```
+
+### Environment variables
+
+| Variable | Purpose |
+| :--- | :--- |
+| `NODE_ENV` | `production` or `development` |
+| `PORT` | Server port (default `3000`) |
+| `DATABASE_PATH` | SQLite file (default `./data/player.db`) |
+| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | Two different secrets, 32+ characters |
+| `ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL_DAYS`, `MEDIA_TOKEN_TTL` | Token lifetimes (`15m`, `30`, `15m`) |
+| `CORS_ORIGIN` | Allowed origins, comma-separated (`*` allows any) |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_AUDIO_FOLDER` | Optional. Setting all three credentials switches storage to Cloudinary |
+| `FIRST_ADMIN_USERNAME`, `FIRST_ADMIN_EMAIL`, `FIRST_ADMIN_PASSWORD` | Used only by `create-admin` |
+
+`GET /health` reports the active storage mode (`local` or `cloudinary`).
+
+## App setup (`spx-fron`)
+
+```bash
+cd spx-fron
+npm install
+cp .env.example .env      # EXPO_PUBLIC_BACKEND_URL=http://<server-address>:3000
+npm start
+```
+
+Scan the QR code with Expo Go for development, or build a standalone APK:
+
+```bash
+eas build --platform android --profile preview
+```
+
+> **Keep the `spx-fron/android/` folder.** EAS uses the native project when it exists, so the native config and `app.config.js` must stay consistent.
 
 ---
 
-## 📦 Building Standalone Android APK
+## API
 
-To build a standalone APK for Android using EAS Build:
-
-1. Install EAS CLI globally:
-   ```bash
-   npm install -g eas-cli
-   ```
-
-2. Build the preview APK:
-   ```bash
-   cd spx-fron
-   npx eas build -p android --profile preview
-   ```
-
-3. Download the generated `.apk` link upon build completion and install on your Android device.
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/health` | Public | Status and storage mode |
+| `POST` | `/auth/register` | Public | Create an account |
+| `POST` | `/auth/login` | Public | Returns access and refresh tokens |
+| `POST` | `/auth/refresh` | Public | Rotate the refresh token |
+| `POST` | `/auth/logout` | Auth | Revoke the session |
+| `GET` | `/auth/me` | Auth | Current user |
+| `GET` | `/songs` | Auth | List the library |
+| `POST` | `/library/resync` | Auth | Rescan the library |
+| `POST` | `/upload` | Admin | Upload a track (`multipart/form-data`, field `song`) |
+| `GET` | `/stream/:song` | Media token | Range-enabled audio stream |
+| `GET` | `/cover/:song` | Media token | Embedded cover art |
+| `GET` | `/download/:song` | Media token | Download a track (local storage mode) |
+| `GET/POST/PUT/DELETE` | `/playlists`, `/playlists/:id` | Auth | Manage your playlists |
+| `GET/POST/DELETE` | `/likes`, `/likes/:songId` | Auth | Manage liked songs |
 
 ---
 
-## 🛡️ License
+## Security notes
 
-Private Repository. Designed and built for high-fidelity personal media streaming.
+- Passwords are hashed with bcrypt (12 rounds). Refresh tokens are stored hashed, rotated on use, and revocable.
+- Auth routes are rate limited (20 attempts per 15 minutes). JSON bodies are capped at 100 KB.
+- Song paths are validated against the music directory to block path traversal.
+- Secrets live only in the server's `.env`, which is never committed. The app only knows the server URL.
+- The Android build allows plain HTTP so it can reach a LAN or Tailscale address. Tailscale encrypts that traffic. For a public deployment, put the API behind HTTPS.
+
+## Repository structure
+
+```text
+├── spx-fron/          # Expo / React Native app (components, hooks, screens, plugins)
+├── spx-bend/          # Express API (server/, music/, .env.example, API.md)
+├── README.md
+├── project.md         # Architecture and developer notes
+├── DEPLOYMENT.md      # Cloudinary and Render deployment notes
+└── render.yaml
+```
+
+## Roadmap
+
+- [ ] Verify Cloudinary storage end to end with real credentials
+- [ ] Public HTTPS API through a Cloudflare Tunnel
+- [ ] Production Android build (AAB)
+- [ ] Automated tests for the backend
+
+## License
+
+Personal project. A license will be added before wider release.

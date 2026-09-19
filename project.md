@@ -1,139 +1,100 @@
-# Pulse Player Project Overview
+# SPX-player: Project Notes
 
-Pulse Player is a self-hosted LAN music streaming project with two parts:
+Developer-facing notes on how Pulse Player is put together, what state it is in, and the gotchas worth remembering. For setup and usage, see `README.md`.
 
-- `spx-fron/` - an Expo / React Native mobile app
-- `spx-bend/` - an Express.js backend that serves music over the local network
+## What it is
 
-The goal of the project is simple: put MP3 files in the backend `music/` folder, run the server, and use the mobile app to browse and play them on the same Wi-Fi network.
+A self-hosted music streaming platform in one monorepo:
 
-## How The Pieces Fit Together
+- `spx-fron/`: Expo + React Native Android app (shows as *SPX Player*)
+- `spx-bend/`: Node.js + Express + SQLite backend that serves and manages the music
 
-1. The backend scans `spx-bend/music/` for `.mp3` files.
-2. It exposes HTTP endpoints for:
-   - listing songs
-   - streaming audio
-   - serving embedded cover art
-   - reporting server health
-3. The mobile app fetches the song list from the backend.
-4. When a user taps a song, the app streams it directly from the backend.
+The server runs on an old laptop (Ubuntu Server) and is reached from the phone over Tailscale, or over the home LAN.
 
-## Frontend
+## How the pieces fit
 
-Location: `spx-fron/`
+1. The user logs in. The app receives a short-lived **access token** and a rotating **refresh token**.
+2. The app calls `GET /songs`. The backend lists tracks from the local `music/` folder, or from Cloudinary if configured.
+3. When the user plays a track, the backend issues a **short-lived media token** scoped to that song.
+4. The app requests `/stream/:song` (and `/cover/:song`) with that token. The backend validates it and streams the audio with HTTP range support.
+5. Admins upload tracks through `POST /upload`. The backend validates the file, reads its ID3 tags, and stores it locally or in Cloudinary.
 
-This is the Pulse Player mobile client built with Expo and React Native.
+## Backend map (`spx-bend/server/`)
 
-### Main behavior
+| File | Responsibility |
+| :--- | :--- |
+| `index.js` | Express app, middleware, all routes, streaming, uploads, storage-mode switching |
+| `auth.js` | Access/refresh/media token signing, refresh rotation, session revocation, `requireAuth`, `requireAdmin`, `requireMediaAccess` |
+| `db.js` | SQLite setup (`node:sqlite`), schema and migrations, WAL mode, foreign keys on |
+| `config.js` | Paths and environment config; refuses weak or missing secrets in production |
+| `validation.js` | Username, email, and password validation |
+| `create-admin.js`, `make-admin.js` | One-off admin creation and promotion scripts |
 
-- Loads songs from the backend on startup.
-- Lets the user change the backend URL from an in-app settings modal.
-- Shows a home view with:
-  - server status / connection state
-  - a search field
-  - a playlist section
-  - a recently played list
-- Opens a player view with:
-  - album art
-  - playback progress
-  - play / pause controls
-  - skip, repeat, and volume icons
+**Tables:** `users`, `sessions`, `playlists`, `playlist_songs`, `likes`.
 
-### Important frontend details
+## Frontend map (`spx-fron/`)
 
-- Default backend URL is hardcoded in `App.js`.
-- The app uses `expo-av` for audio playback.
-- It uses `BlurView` and `LinearGradient` for the UI styling.
-- It has Android-specific fallback logic for `10.0.2.2` and `localhost`.
+| Area | Files |
+| :--- | :--- |
+| Root | `App.js` wires the hooks together and renders the main layout |
+| Hooks | `useAuth` (login, register, refresh, authenticated requests), `useSongs` (library, backend URL, resync, delete), `useAudio` (playback, queue, seek, buffering), `usePlaylists`, `useLikedSongs` |
+| Screens | `PlayerView` (artwork, progress, controls, portrait/landscape) |
+| Components | `AuthScreen`, `MiniPlayer`, `SongRow`, `PlaylistCard`, `ProgressBar`, `Modals` (settings, playlists, upload) |
+| Native config | `app.config.js`, `eas.json`, `plugins/withNetworkSecurityConfig.js` |
 
-### Frontend entry points
+## Storage modes
 
-- `spx-fron/App.js` - main app UI and playback logic
-- `spx-fron/app.json` - Expo config
-- `spx-fron/app.config.js` - dynamic Expo config
-- `spx-fron/babel.config.js` - Babel config
+| Mode | When | Songs live in |
+| :--- | :--- | :--- |
+| Local | Cloudinary variables missing | `spx-bend/music/` |
+| Cloudinary | All three `CLOUDINARY_*` credentials set | Cloudinary (audio as `video` resources) |
 
-## Backend
+The backend picks the mode at startup and `GET /health` reports it. Cloudinary offloads large audio storage and delivery from the laptop's disk, so the laptop only handles auth, the database, and API traffic.
 
-Location: `spx-bend/`
+## Deployment
 
-This is the music server that the mobile app talks to.
+**Current setup:** Ubuntu Server on the laptop, managed over SSH, reached through Tailscale. The app's server URL points at the server's Tailscale address.
 
-### Main behavior
+**Planned:** a public HTTPS API through a Cloudflare Tunnel (no router port-forwarding), then a production AAB build pointing at `https://api.<domain>`.
 
-- Ensures the `music/` directory exists.
-- Lists MP3 files in that directory.
-- Streams songs with HTTP range support.
-- Extracts embedded cover art from MP3 metadata.
-- Exposes a health endpoint for connection checks.
+## Status
 
-### API endpoints
+**Done**
 
-- `GET /health`
-  - Returns `{ status: 'ok' }`
+- [x] Expo app with auth, library, search, player, mini player, playlists, likes, admin upload
+- [x] Express API with SQLite, JWT access and refresh tokens, sessions, roles
+- [x] Range streaming, cover art extraction, signed media tokens
+- [x] Helmet, CORS, rate limiting, upload validation, path-traversal protection
+- [x] Standalone Android APK through EAS Build
+- [x] Backend running on the home server, reachable over Tailscale
+- [x] Cloudinary integration implemented
 
-- `GET /songs`
-  - Returns a JSON array of MP3 filenames in `music/`
+**Remaining**
 
-- `GET /stream/:song`
-  - Streams the requested MP3 file
-  - Supports partial content via `Range` headers
+- [ ] Add real Cloudinary credentials and check `/health` reports `cloudinary`
+- [ ] Upload and stream test through Cloudinary
+- [ ] Cloudflare Tunnel and a public HTTPS domain
+- [ ] Production build with the HTTPS backend URL
+- [ ] Backend test suite (none yet)
 
-- `GET /cover/:song`
-  - Returns embedded cover art if the MP3 contains artwork
-  - Returns `404` if no cover art exists
+## Gotchas
 
-### Backend entry points
+- **Node version:** the backend uses the built-in `node:sqlite`, so it needs Node 22 or newer.
+- **Cleartext HTTP on Android:** release builds block plain HTTP by default. It worked in Expo Go but failed in the standalone APK until `plugins/withNetworkSecurityConfig.js` was added. Tailscale encrypts the traffic in the meantime. A public deployment should use HTTPS.
+- **Do not delete `spx-fron/android/`:** EAS uses the existing native project, and Expo's `android.package` value can be ignored while it exists.
+- **Playlists moved to SQLite.** Older versions used `playlists.json`, and the backend migrates legacy playlists to the first user.
+- **Secrets stay on the server.** Never commit `.env`. Only `.env.example` belongs in git.
+- **Older docs may be stale.** If anything here disagrees with the code and `package.json` files, the code wins.
 
-- `spx-bend/index.js` - simple launcher that loads the server
-- `spx-bend/server/index.js` - Express app and route definitions
-
-## Data Flow
-
-1. A user starts the backend server.
-2. The server reads audio files from `spx-bend/music/`.
-3. The mobile app connects to the backend URL.
-4. The app requests `/songs` to build its library view.
-5. When a song is selected, the app requests `/stream/:song` to play it.
-6. If artwork is available, the app loads `/cover/:song` for visuals.
-
-## Repository Structure
-
-```text
-spx-project/
-|-- spx-fron/        # Expo mobile app
-|-- spx-bend/        # Express music server
-`-- AGENTS.md        # Local development instructions
-```
-
-## Local Development
-
-### Frontend
+## Common commands
 
 ```bash
-cd spx-fron
-npm install
-npm start
+# Backend
+cd spx-bend && npm install && npm start
+npm run create-admin
+npm run make-admin -- <username>
+
+# App
+cd spx-fron && npm install && npm start
+eas build --platform android --profile preview
 ```
-
-### Backend
-
-```bash
-cd spx-bend
-npm install
-npm start
-```
-
-## Runtime Expectations
-
-- The backend listens on port `3000` by default.
-- The backend should be reachable over LAN from a phone or emulator.
-- Android emulators can use `http://10.0.2.2:3000`.
-- Physical devices should use the machine's LAN IP.
-
-## Notes
-
-- Only `.mp3` files are handled by the backend.
-- The backend refuses invalid paths to avoid directory traversal.
-- The frontend currently uses placeholder artwork when no local art is available.
-- There is no test suite configured for the backend yet.
