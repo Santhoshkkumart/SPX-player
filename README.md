@@ -1,4 +1,4 @@
-# Pulse Player 🎵
+# SPX-Player 🎵
 
 **SPX-Player**  is a self-hosted music streaming platform. Your music lives on a server you own, an old laptop in my case, and an Android app streams, uploads, and downloads it from anywhere over a private Tailscale network. No subscription, no cloud bill.
 
