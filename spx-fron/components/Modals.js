@@ -96,21 +96,21 @@ export function SettingsModal({
               )}
 
               {/* Server URL Input Box */}
-              <Text style={styles.label}>LAN BACKEND URL</Text>
+              <Text style={styles.label}>SERVER BACKEND URL / TAILSCALE FUNNEL</Text>
               <View style={styles.inputBox}>
                 <Server color="#A78BFA" size={18} style={{ marginLeft: 14, marginRight: 10 }} />
                 <TextInput
                   style={styles.inputField}
                   value={urlValue}
                   onChangeText={handleUrlChange}
-                  placeholder="http://192.168.31.84:3000"
+                  placeholder="http://192.168.x.x:5000 or https://your-node.ts.net"
                   placeholderTextColor="#64748B"
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="url"
                 />
               </View>
-              <Text style={styles.inputHint}>Enter your computer's local IP address on WiFi</Text>
+              <Text style={styles.inputHint}>Enter your server IP, Tailscale Funnel domain, or remote endpoint</Text>
 
               {/* Action Buttons */}
               <View style={styles.buttonColumn}>

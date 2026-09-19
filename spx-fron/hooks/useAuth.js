@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { sanitizeBaseUrl } from '../utils/helpers';
 
 const ACCESS_TOKEN_KEY = 'pulsePlayerAccessToken';
@@ -49,6 +49,7 @@ export function useAuth(initialBackendUrl) {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState('');
   const [authMode, setAuthMode] = useState('login');
+  
   const accessTokenRef = useRef('');
   const refreshTokenRef = useRef('');
   const backendUrlRef = useRef(sanitizeBaseUrl(initialBackendUrl));
@@ -60,6 +61,7 @@ export function useAuth(initialBackendUrl) {
   const setSession = useCallback(async (session) => {
     const nextAccessToken = session.accessToken || '';
     const nextRefreshToken = session.refreshToken || '';
+    
     accessTokenRef.current = nextAccessToken;
     refreshTokenRef.current = nextRefreshToken;
     setAccessToken(nextAccessToken);
@@ -89,6 +91,7 @@ export function useAuth(initialBackendUrl) {
   const refreshSession = useCallback(async () => {
     const safeBaseUrl = sanitizeBaseUrl(backendUrlRef.current);
     const token = refreshTokenRef.current;
+    
     if (!safeBaseUrl || !token) throw new Error('No refresh token');
 
     const response = await fetch(`${safeBaseUrl}/auth/refresh`, {
@@ -106,12 +109,14 @@ export function useAuth(initialBackendUrl) {
   const authenticatedFetch = useCallback(async (pathOrUrl, options = {}, retry = true) => {
     const safeBaseUrl = sanitizeBaseUrl(backendUrlRef.current);
     const url = /^https?:\/\//i.test(pathOrUrl) ? pathOrUrl : `${safeBaseUrl}${pathOrUrl}`;
+    
     const headers = {
       ...(options.headers || {}),
       ...(accessTokenRef.current ? { Authorization: `Bearer ${accessTokenRef.current}` } : {}),
     };
 
     const response = await fetch(url, { ...options, headers });
+    
     if (response.status === 401 && retry && refreshTokenRef.current) {
       try {
         const nextToken = await refreshSession();
@@ -133,7 +138,7 @@ export function useAuth(initialBackendUrl) {
     setAuthLoading(true);
     setAuthError('');
 
-    // Safety fallback timer to ensure app never hangs on 'Restoring session...' forever
+    // Safety fallback timer
     const safetyTimer = setTimeout(() => {
       setAuthLoading(false);
     }, 4000);
@@ -143,6 +148,7 @@ export function useAuth(initialBackendUrl) {
         getSecureItem(ACCESS_TOKEN_KEY),
         getSecureItem(REFRESH_TOKEN_KEY),
       ]);
+      
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Storage timeout')), 2500)
       );
@@ -172,12 +178,12 @@ export function useAuth(initialBackendUrl) {
           }
         } catch (e) {
           clearTimeout(fetchTimeout);
-          console.warn('Restore session network error or timeout:', e);
+          console.warn('Restore session network error:', e);
           await clearSession();
         }
       }
     } catch (err) {
-      console.warn('Restore session storage error or timeout:', err);
+      console.warn('Restore session storage error:', err);
       await clearSession();
     } finally {
       clearTimeout(safetyTimer);
@@ -192,14 +198,17 @@ export function useAuth(initialBackendUrl) {
   const login = useCallback(async ({ email, password }) => {
     const safeBaseUrl = sanitizeBaseUrl(backendUrlRef.current);
     setAuthError('');
+    
     try {
       const response = await fetch(`${safeBaseUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
+      
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Login failed');
+      
       await setSession(payload);
       return true;
     } catch (err) {
@@ -211,14 +220,17 @@ export function useAuth(initialBackendUrl) {
   const register = useCallback(async ({ username, email, password }) => {
     const safeBaseUrl = sanitizeBaseUrl(backendUrlRef.current);
     setAuthError('');
+    
     try {
       const response = await fetch(`${safeBaseUrl}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
       });
+      
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Registration failed');
+      
       await setSession(payload);
       return true;
     } catch (err) {
@@ -240,7 +252,6 @@ export function useAuth(initialBackendUrl) {
       console.error('Logout request failed:', err);
     } finally {
       await clearSession();
-      Alert.alert('Signed out', 'You have been logged out.');
     }
   }, [authenticatedFetch, clearSession]);
 

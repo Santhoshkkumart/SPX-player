@@ -41,16 +41,16 @@ export function AuthScreen({ mode, error, loading, backendUrl, onServerUrlChange
               <Text style={styles.title}>SPX PLAYER</Text>
             </View>
 
-            <Text style={styles.subtitle}>{isRegister ? 'Create your account to stream' : 'Sign in to your LAN music server'}</Text>
+            <Text style={styles.subtitle}>{isRegister ? 'Create your account to stream' : 'Sign in to your music server node'}</Text>
 
-            <Text style={styles.label}>SERVER URL (LAN IP)</Text>
+            <Text style={styles.label}>SERVER URL (IP / TAILSCALE FUNNEL)</Text>
             <View style={styles.serverWrapper}>
               <Server color="#A78BFA" size={18} style={{ marginLeft: 14, marginRight: 8 }} />
               <TextInput
                 style={styles.serverInput}
                 value={backendUrl}
                 onChangeText={onServerUrlChange}
-                placeholder="http://192.168.31.84:3000"
+                placeholder="http://192.168.x.x:5000 or https://your-node.ts.net"
                 placeholderTextColor="#64748B"
                 autoCapitalize="none"
                 autoCorrect={false}

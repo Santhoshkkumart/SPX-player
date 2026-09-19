@@ -773,7 +773,7 @@ export default function App() {
 
                     <View style={styles.serverCapsulePill}>
                       <View style={styles.pulseDotGreen} />
-                      <Text style={styles.currentUrl} numberOfLines={1}>LAN NODE ONLINE</Text>
+                      <Text style={styles.currentUrl} numberOfLines={1}>NODE ONLINE</Text>
                     </View>
 
                     <TouchableOpacity onPress={handleResyncLibrary} disabled={loading} style={styles.glassHeaderBtn} hitSlop={8}>
@@ -791,7 +791,7 @@ export default function App() {
                     <View style={styles.heroContentLeft}>
                       <Text style={styles.heroSubTag}>WELCOME BACK</Text>
                       <Text style={styles.greeting}>{auth.user?.username || 'Santhosh'}</Text>
-                      <Text style={styles.subGreeting}>High-Fidelity LAN Audio Network</Text>
+                      <Text style={styles.subGreeting}>High-Fidelity Audio Network</Text>
                     </View>
                     <View style={styles.heroBadgePill}>
                       <Disc color="#A78BFA" size={24} />
@@ -890,7 +890,7 @@ export default function App() {
                           <View style={styles.uploadCardHeader}>
                             <View style={styles.uploadCopy}>
                               <Text style={styles.uploadLabel}>Add Audio Files</Text>
-                              <Text style={styles.uploadHint}>Upload MP3s from your device to stream on the LAN server.</Text>
+                              <Text style={styles.uploadHint}>Upload MP3s from your device to stream on your server node.</Text>
                             </View>
                             <TouchableOpacity
                               onPress={pickAndUploadSong}

@@ -1,6 +1,6 @@
 # SPX Player 🎵
 
-**SPX Player** is a self-hosted, local network (LAN) high-fidelity music streaming ecosystem. It allows you to host your personal lossless and high-quality music collection on a central computer/server and stream uncompressed audio seamlessly to mobile devices, tablets, and web browsers over your home Wi-Fi network with zero delay.
+**SPX Player** is a self-hosted, high-fidelity music streaming ecosystem. It allows you to host your personal lossless and high-quality music collection on a central computer/server and stream uncompressed audio seamlessly to mobile devices, tablets, and web browsers over local Wi-Fi, Tailscale Funnel, or remote HTTPS endpoints with zero delay.
 
 ---
 
@@ -9,7 +9,7 @@
 * 🎨 **Obsidian-Violet Luxury Design System**: Handcrafted UI featuring dark glass paneling (`#07090E`), ambient glow halos, claymorphic card textures, high-contrast micro-typography, and a floating bottom navigation island.
 * 📀 **Authentic Vinyl LP Turntable Deck**: Full-screen player featuring a 360° rotating vinyl LP record with concentric groove rings, centered album artwork label, silver-violet stylus tonearm overlay, and non-snapping continuous rotation physics.
 * ⚡ **High-Performance Gapless Audio Pipeline**: Zero-compression audio playback via `expo-audio` with automatic **background pre-buffering** (pre-fetches the next track 10 seconds before the current song ends for seamless queue transitions).
-* 🌐 **LAN Auto-Discovery & Hot IP Switching**: Seamlessly configure or switch your backend server LAN IP (`http://192.168.x.x:5000`) directly from the login screen or settings modal with real-time ping latency indicators.
+* 🌐 **Universal Server Endpoint & Tailscale Support**: Seamlessly configure or switch your backend server IP (`http://192.168.x.x:5000`) or Tailscale Funnel domain (`https://your-node.ts.net`) directly from the login screen or settings modal with real-time ping latency indicators.
 * 🔐 **JWT Dual-Token Security**: Complete authentication system supporting access and refresh tokens, user registration, and secure media endpoint protection.
 * 📤 **Multi-File Batch Uploader**: Fast audio file uploader with real-time speed calculation (`MB/s` / `KB/s`), progress tracking, and server-side metadata/ID3 artwork extraction.
 * 📑 **Playlist & Library Control**: Create playlists, batch add tracks, download audio files directly to mobile device storage, delete tracks, and trigger instant server library resyncs.
